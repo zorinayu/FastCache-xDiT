@@ -78,11 +78,15 @@ Where:
 
 For caching decisions at the transformer block level, FastCache computes a relative change metric:
 
-$$\delta_t = \frac{\|H_t - H_{t-1}\|_F}{\|H_{t-1}\|_F}$$
+<div align="center">
+<img src="https://render.githubusercontent.com/render/math?math=\delta_t = \frac{\|H_t - H_{t-1}\|_F}{\|H_{t-1}\|_F}" alt="delta_t = ||H_t - H_{t-1}||_F / ||H_{t-1}||_F">
+</div>
 
 A statistical test based on chi-square distribution determines when caching can be applied safely:
 
-$$ND\delta_t^2 \leq \chi^2_{nm^2, 1-\alpha}$$
+<div align="center">
+<img src="https://render.githubusercontent.com/render/math?math=ND\delta_t^2 \leq \chi^2_{nm^2, 1-\alpha}" alt="ND delta_t^2 <= chi^2_{nm^2, 1-alpha}">
+</div>
 
 Where:
 - $N$ is the batch size
