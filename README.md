@@ -137,31 +137,33 @@ Run FastCache with Stable Diffusion 3:
 
 ```bash
 # Basic usage
-python examples/fastcache_benchmark.py \
+python examples/run_fastcache_test.py \
     --model_type sd3 \
     --model "stabilityai/stable-diffusion-3-medium-diffusers" \
     --prompt "a photo of an astronaut riding a horse on the moon" \
     --num_inference_steps 30 \
+    --cache_method "Fast" \
     --cache_ratio_threshold 0.05 \
     --motion_threshold 0.1
 
-# Using the convenience script
-./examples/run_fastcache_benchmark.sh
+# Using the convenience benchmark script to compare different cache methods
+./examples/run_fastcache_benchmark.sh sd3
 ```
 
 Run FastCache with Flux model:
 
 ```bash
 # Basic usage
-python examples/fastcache_benchmark.py \
+python examples/run_fastcache_test.py \
     --model_type flux \
     --model "black-forest-labs/FLUX.1-schnell" \
     --prompt "a serene landscape with mountains and a lake" \
     --num_inference_steps 30 \
+    --cache_method "Fast" \
     --cache_ratio_threshold 0.05 \
     --motion_threshold 0.1
 
-# Using the convenience script
+# Using the convenience benchmark script
 ./examples/run_fastcache_benchmark.sh flux
 ```
 
@@ -173,13 +175,13 @@ python examples/fastcache_benchmark.py \
 | `--model` | Model path or name | `stabilityai/stable-diffusion-3-medium-diffusers` |
 | `--prompt` | Text prompt for image generation | `a photo of an astronaut riding a horse on the moon` |
 | `--num_inference_steps` | Number of inference steps | `30` |
-| `--seed` | Random seed | `0` |
-| `--batch_size` | Batch size | `1` |
+| `--cache_method` | Cache method (`None`, `Fast`, `Fb`, `Tea`) | `Fast` |
+| `--seed` | Random seed | `42` |
 | `--height` | Image height | `768` |
 | `--width` | Image width | `768` |
-| `--cache_ratio_threshold` | FastCache ratio threshold | `0.05` |
+| `--cache_ratio_threshold` | Cache ratio threshold | `0.05` |
 | `--motion_threshold` | FastCache motion threshold | `0.1` |
-| `--output_dir` | Output directory for results | `fastcache_benchmark_results` |
+| `--output_dir` | Output directory for results | `fastcache_test_results` |
 
 ### 3. Benchmark FastCache
 
@@ -187,18 +189,22 @@ Compare FastCache with other acceleration methods:
 
 ```bash
 # Run on Stable Diffusion 3
-./examples/run_fastcache_benchmark.sh
+./examples/run_fastcache_benchmark.sh sd3
 
 # Run on Flux model
 ./examples/run_fastcache_benchmark.sh flux
 ```
 
 The benchmark will:
-- Run baseline model without acceleration
-- Run with FastCache acceleration
-- Run with TeaCache and First-Block-Cache (for Flux model)
-- Generate comparison images and performance statistics
-- Create timing charts in the output directory
+- Run baseline model without acceleration (cache_method="None")
+- Run with FastCache acceleration (cache_method="Fast")
+- Run with First-Block-Cache acceleration (cache_method="Fb")
+- Run with TeaCache acceleration (cache_method="Tea")
+- Generate comparison images for quality assessment
+- Create performance statistics and cache hit ratio charts
+- Generate a comprehensive HTML report with all comparisons
+
+All results will be saved to the `fastcache_benchmark_results` directory, making it easy to compare the different caching methods in terms of both performance and output quality.
 
 ### 4. Combining with Parallel Methods
 

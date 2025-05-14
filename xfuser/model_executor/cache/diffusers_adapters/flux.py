@@ -12,24 +12,38 @@ from xfuser.model_executor.cache.diffusers_adapters.registry import TRANSFORMER_
 
 from xfuser.model_executor.cache import utils
 
-def create_cached_transformer_blocks(use_cache, transformer, rel_l1_thresh, return_hidden_states_first, num_steps):
+def create_cached_transformer_blocks(use_cache, transformer, rel_l1_thresh, return_hidden_states_first, num_steps, motion_threshold=0.1):
     cached_transformer_class = {
         "Fb": utils.FBCachedTransformerBlocks,
         "Tea": utils.TeaCachedTransformerBlocks,
+        "Fast": utils.FastCachedTransformerBlocks,
     }.get(use_cache)
 
     if not cached_transformer_class:
         raise ValueError(f"Unsupported use_cache value: {use_cache}")
 
-    return cached_transformer_class(
-        transformer.transformer_blocks,
-        transformer.single_transformer_blocks,
-        transformer=transformer,
-        rel_l1_thresh=rel_l1_thresh,
-        return_hidden_states_first=return_hidden_states_first,
-        num_steps=num_steps,
-        name=TRANSFORMER_ADAPTER_REGISTRY.get(type(transformer)),
-    )
+    # FastCache requires motion_threshold parameter
+    if use_cache == "Fast":
+        return cached_transformer_class(
+            transformer.transformer_blocks,
+            transformer.single_transformer_blocks,
+            transformer=transformer,
+            rel_l1_thresh=rel_l1_thresh,
+            return_hidden_states_first=return_hidden_states_first,
+            num_steps=num_steps,
+            motion_threshold=motion_threshold,
+            name=TRANSFORMER_ADAPTER_REGISTRY.get(type(transformer)),
+        )
+    else:
+        return cached_transformer_class(
+            transformer.transformer_blocks,
+            transformer.single_transformer_blocks,
+            transformer=transformer,
+            rel_l1_thresh=rel_l1_thresh,
+            return_hidden_states_first=return_hidden_states_first,
+            num_steps=num_steps,
+            name=TRANSFORMER_ADAPTER_REGISTRY.get(type(transformer)),
+        )
 
 
 def apply_cache_on_transformer(
@@ -39,9 +53,17 @@ def apply_cache_on_transformer(
     return_hidden_states_first=False,
     num_steps=8,
     use_cache="Fb",
+    motion_threshold=0.1,
 ):
     cached_transformer_blocks = nn.ModuleList([
-        create_cached_transformer_blocks(use_cache, transformer, rel_l1_thresh, return_hidden_states_first, num_steps)
+        create_cached_transformer_blocks(
+            use_cache, 
+            transformer, 
+            rel_l1_thresh, 
+            return_hidden_states_first, 
+            num_steps,
+            motion_threshold
+        )
     ])
 
     dummy_single_transformer_blocks = torch.nn.ModuleList()

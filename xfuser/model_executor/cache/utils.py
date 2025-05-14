@@ -12,6 +12,7 @@ from xfuser.core.distributed import (
 import torch
 from torch.nn import Module
 from abc import ABC, abstractmethod
+import math
 
 
 # --------- CacheContext --------- #
@@ -26,7 +27,11 @@ class CacheContext(Module):
         self.register_buffer("hidden_states_residual", None, persistent=False)
         self.register_buffer("encoder_hidden_states_residual", None, persistent=False)
         self.register_buffer("modulated_inputs", None, persistent=False)
-
+        
+        # For FastCache
+        self.register_buffer("prev_hidden_states", None, persistent=False)
+        self.register_buffer("static_token_mask", None, persistent=False)
+        
     def get_coef(self, name: str) -> torch.Tensor:
         return getattr(self, f"{name}_coef")
 
@@ -247,3 +252,175 @@ class TeaCachedTransformerBlocks(CachedTransformerBlocks):
         prev_modulated = self.cache_context.modulated_inputs
         self.cache_context.modulated_inputs = modulated
         return modulated, prev_modulated, hidden_states, encoder_hidden_states
+
+
+class FastCachedTransformerBlocks(CachedTransformerBlocks):
+    def __init__(
+        self,
+        transformer_blocks,
+        single_transformer_blocks=None,
+        *,
+        transformer=None,
+        rel_l1_thresh=0.05,  # Default for FastCache is lower
+        motion_threshold=0.1,
+        return_hidden_states_first=True,
+        num_steps=-1,
+        name="default",
+        callbacks: Optional[List[CacheCallback]] = None,
+    ):
+        super().__init__(transformer_blocks,
+                       single_transformer_blocks=single_transformer_blocks,
+                       transformer=transformer,
+                       rel_l1_thresh=rel_l1_thresh,
+                       num_steps=num_steps,
+                       return_hidden_states_first=return_hidden_states_first,
+                       name=name,
+                       callbacks=callbacks)
+        
+        # FastCache specific parameters
+        self.motion_threshold = motion_threshold
+        self.register_buffer("cache_hits", torch.tensor(0).cuda())
+        self.register_buffer("total_steps", torch.tensor(0).cuda())
+        
+        # Initialize cache adaptation parameters
+        self.beta0 = 0.01
+        self.beta1 = 0.5
+        self.beta2 = -0.002
+        self.beta3 = 0.00005
+        
+        # Linear approximation for static tokens
+        if hasattr(transformer_blocks[0], "config"):
+            hidden_size = transformer_blocks[0].config.hidden_size
+        else:
+            # Estimate hidden size from the first block
+            hidden_size = next(transformer_blocks[0].parameters()).shape[-1]
+            
+        self.cache_projection = torch.nn.Linear(hidden_size, hidden_size).cuda()
+
+    def get_start_idx(self) -> int:
+        return 0  # Process all blocks when not caching
+    
+    def get_adaptive_threshold(self, variance_score, timestep=None):
+        """Calculate adaptive threshold based on variance and current timestep"""
+        if timestep is None:
+            timestep = self.cnt
+            
+        normalized_timestep = timestep / 1000.0  # Normalize timestep to [0,1] range
+        return (self.beta0 + 
+                self.beta1 * variance_score + 
+                self.beta2 * normalized_timestep + 
+                self.beta3 * normalized_timestep**2)
+
+    def are_two_tensor_similar(self, t1: torch.Tensor, t2: torch.Tensor, threshold: float) -> torch.Tensor:
+        """Using FastCache's relative change metric for caching decision"""
+        if t1 is None or t2 is None:
+            return torch.tensor(False, dtype=torch.bool).cuda()
+            
+        # Compute relative change (Frobenius norm)
+        delta = self.l1_distance(t1, t2)
+        
+        # Update total steps counter
+        self.total_steps += 1
+        
+        # Compute statistical threshold based on chi-square
+        n, d = t1.shape[0], t1.shape[1]  # token count, hidden dim
+        dof = n * d  # degrees of freedom
+        
+        # Approximate chi-square threshold using normal distribution for large DOF
+        z = 1.96  # z-score for 95% confidence
+        chi2_threshold = dof + z * math.sqrt(2 * dof)
+        statistical_threshold = math.sqrt(chi2_threshold / dof)
+        
+        # Adaptive threshold based on variance and timestep
+        adaptive_threshold = self.get_adaptive_threshold(delta, self.cnt)
+        
+        # Final threshold combines statistical validity with adaptive behavior
+        final_threshold = max(threshold, min(statistical_threshold, adaptive_threshold))
+        
+        # Cache decision
+        use_cache = delta <= final_threshold
+        
+        # Update cache hits counter
+        self.cache_hits += use_cache.int()
+        
+        return use_cache
+
+    def compute_motion_saliency(self, hidden_states):
+        """Compute motion saliency for spatial token reduction"""
+        if self.cache_context.prev_hidden_states is None:
+            return torch.ones(hidden_states.shape[1], device=hidden_states.device)
+            
+        # Compute token-wise differences
+        token_diffs = (hidden_states - self.cache_context.prev_hidden_states).abs()
+        
+        # Take max across feature dimension to get token saliency
+        token_saliency = token_diffs.max(dim=-1)[0].squeeze(0)
+        
+        # Normalize saliency
+        if token_saliency.max() > 0:
+            token_saliency = token_saliency / token_saliency.max()
+            
+        return token_saliency
+
+    def get_modulated_inputs(self, hidden_states, encoder_hidden_states, *args, **kwargs):
+        # Store current hidden states for later comparisons
+        prev_hidden_states = self.cache_context.prev_hidden_states
+        
+        # First run: just store hidden states and process normally
+        if prev_hidden_states is None:
+            self.cache_context.prev_hidden_states = hidden_states.detach().clone()
+            return hidden_states, None, hidden_states, encoder_hidden_states
+        
+        # Compute motion saliency and mask for token reduction
+        motion_saliency = self.compute_motion_saliency(hidden_states)
+        self.cache_context.static_token_mask = motion_saliency <= self.motion_threshold
+        
+        # Update cached states
+        self.cache_context.prev_hidden_states = hidden_states.detach().clone()
+        
+        return hidden_states, prev_hidden_states, hidden_states, encoder_hidden_states
+    
+    def process_blocks(self, start_idx: int, hidden: torch.Tensor, encoder: torch.Tensor, *args, **kwargs):
+        """Override to implement spatial token reduction for FastCache"""
+        # If using cache, shortcut and return
+        if self.use_cache:
+            return hidden, encoder
+        
+        # Check if we can use spatial token reduction
+        static_mask = self.cache_context.static_token_mask
+        if static_mask is not None and static_mask.any() and not static_mask.all():
+            batch_size, seq_len, hidden_dim = hidden.shape
+            
+            # Split tokens into motion and static
+            motion_indices = torch.where(~static_mask)[0]
+            static_indices = torch.where(static_mask)[0]
+            
+            if len(motion_indices) > 0:
+                # Get motion tokens
+                motion_hidden = hidden.index_select(1, motion_indices)
+                motion_encoder = encoder.index_select(1, motion_indices) if encoder is not None else None
+                
+                # Process motion tokens through transformer blocks
+                processed_motion_hidden, processed_motion_encoder = super().process_blocks(
+                    start_idx, motion_hidden, motion_encoder, *args, **kwargs
+                )
+                
+                # Process static tokens through linear projection
+                static_hidden = hidden.index_select(1, static_indices)
+                static_encoder = encoder.index_select(1, static_indices) if encoder is not None else None
+                static_hidden = self.cache_projection(static_hidden)
+                
+                # Combine results
+                result_hidden = hidden.clone()
+                result_hidden.index_copy_(1, motion_indices, processed_motion_hidden)
+                result_hidden.index_copy_(1, static_indices, static_hidden)
+                
+                result_encoder = encoder.clone() if encoder is not None else None
+                if result_encoder is not None:
+                    result_encoder.index_copy_(1, motion_indices, processed_motion_encoder)
+                    result_encoder.index_copy_(1, static_indices, static_encoder)
+                
+                return result_hidden, result_encoder
+        
+        # Fall back to normal processing
+        return super().process_blocks(start_idx, hidden, encoder, *args, **kwargs)
