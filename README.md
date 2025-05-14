@@ -247,29 +247,7 @@ result = paralleler(prompt="your prompt", num_inference_steps=30)
 
 <h2 id="parallel">📈 xDiT's Parallel Methods</h2>
 
-FastCache-xDiT is fully compatible with the parallel acceleration methods provided by xDiT:
-
-<div align="center">
-    <img src="https://raw.githubusercontent.com/xdit-project/xdit_assets/main/methods/xdit_method.png" alt="xdit methods">
-</div>
-
-<h4 id="PipeFusion">PipeFusion</h4>
-
-[PipeFusion: Displaced Patch Pipeline Parallelism for Diffusion Models](./docs/methods/pipefusion.md)
-
-<h4 id="USP">Unified Sequence Parallelism (USP)</h4>
-
-[USP: A Unified Sequence Parallelism Approach for Long Context Generative AI](./docs/methods/usp.md)
-
-<h4 id="hybrid_parallel">Hybrid Parallel</h4>
-
-[Hybrid Parallelism](./docs/methods/hybrid.md)
-
-<h2 id="1gpuacc">🔍 Single GPU Acceleration</h2>
-
-<h4 id="cache_acceleration">Cache Acceleration</h4>
-
-xDiT offers multiple cache-based acceleration methods:
+FastCache-xDiT is fully compatible with the parallel acceleration methods provided by xDiT, this repo offers multiple cache-based acceleration methods:
 
 1. **FastCache**: Our adaptive spatial-temporal caching method that uses motion-aware token reduction and statistical caching to exploit computational redundancies. [Read more about FastCache](./docs/methods/fastcache.md).
 
@@ -280,10 +258,6 @@ xDiT offers multiple cache-based acceleration methods:
 4. **DiTFastAttn**: Reduces attention computation by leveraging redundancies between different steps of the Diffusion Model.
 
 [DiTFastAttn: Attention Compression for Diffusion Transformer Models](./docs/methods/ditfastattn.md)
-
-<h4 id="compilation">Compilation Acceleration</h4>
-
-We utilize two compilation acceleration techniques, [torch.compile](https://pytorch.org/tutorials/intermediate/torch_compile_tutorial.html) and [onediff](https://github.com/siliconflow/onediff), to enhance runtime speed on GPUs. These compilation accelerations can be used alongside FastCache for even greater performance.
 
 <h2 id="dev-guide">📚 Develop Guide</h2>
 
