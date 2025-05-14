@@ -18,13 +18,22 @@ try:
 except ImportError:
     print("Warning: diffusers library not properly installed, make sure you have diffusers>=0.30.0")
 
-# Import the cache modules directly
+# 导入缓存模块
 try:
-    # from xfuser.model_executor.accelerator.fastcache import FastCacheAccelerator
-    from xfuser.model_executor.cache.utils import FBCachedTransformerBlocks, TeaCachedTransformerBlocks, FastCachedTransformerBlocks
-    from xfuser.model_executor.cache.diffusers_adapters.flux import apply_cache_on_transformer
-except ImportError:
-    print("Warning: xfuser cache modules not found")
+    # 导入所有缓存类
+    from xfuser.model_executor.cache.utils import (
+        FBCachedTransformerBlocks, 
+        TeaCachedTransformerBlocks, 
+        FastCachedTransformerBlocks,
+        CacheContext
+    )
+    
+    # 检查是否成功导入
+    cache_modules_available = True
+    print("Successfully imported cache modules from xfuser")
+except ImportError as e:
+    print(f"Warning: xfuser cache modules not found: {e}")
+    cache_modules_available = False
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Cache Benchmark Test")
@@ -55,55 +64,126 @@ def parse_args():
     
     return args
 
-def apply_fastcache(model, cache_threshold=0.05, motion_threshold=0.1):
-    """Apply FastCache to transformer blocks in the model"""
-    accelerators = []
+def apply_cache(model, cache_method, cache_threshold=0.05, motion_threshold=0.1, num_steps=20):
+    """应用指定的缓存方法到模型"""
+    # 确认缓存模块可用
+    if not cache_modules_available:
+        print(f"Warning: Cache modules not available, skipping {cache_method}Cache application")
+        return model, None
     
-    # Find and apply FastCache to transformer blocks
-    target_module = None
-    if hasattr(model, "unet"):
-        target_module = model.unet
-    elif hasattr(model, "transformer"):
-        target_module = model.transformer
+    # 查找并应用缓存到transformer块
+    if not hasattr(model, "transformer"):
+        print(f"WARNING: Model does not have a transformer attribute, cannot apply {cache_method}Cache")
+        return model, None
     
-    if target_module is not None:
-        # Recursively find and apply FastCache to transformer blocks
-        def apply_cache(module, prefix=''):
-            for name, child in module.named_children():
-                full_name = f"{prefix}.{name}" if prefix else name
-                
-                # Check module type
-                module_type = child.__class__.__name__
-                if "Transformer" in module_type or "Attention" in module_type:
-                    # Create accelerator
-                    accelerator = FastCacheAccelerator(
-                        child, 
-                        cache_ratio_threshold=cache_threshold,
-                        motion_threshold=motion_threshold
-                    )
-                    accelerators.append((full_name, accelerator))
-                    
-                    # Replace original module
-                    setattr(module, name, accelerator)
-                    print(f"Applied FastCache to {module_type} at {full_name}")
-                else:
-                    # Recursively process child modules
-                    apply_cache(child, full_name)
-        
-        apply_cache(target_module)
-        print(f"Applied FastCache to {len(accelerators)} transformer blocks")
+    transformer = model.transformer
+    
+    # 检查是否有transformer_blocks属性
+    if not hasattr(transformer, "transformer_blocks"):
+        print(f"WARNING: Transformer does not have transformer_blocks, cannot apply {cache_method}Cache")
+        return model, None
+    
+    # 获取transformer块和single_transformer_blocks (如果有的话)
+    transformer_blocks = transformer.transformer_blocks
+    single_transformer_blocks = None
+    if hasattr(transformer, "single_transformer_blocks"):
+        single_transformer_blocks = transformer.single_transformer_blocks
+    
+    # 保存原始的transformer_blocks
+    original_transformer_blocks = transformer_blocks
+    original_single_transformer_blocks = single_transformer_blocks
+    
+    # 为了记录缓存命中统计
+    stats_collector = {"hits": 0, "total": 0}
+    
+    # 根据缓存方法选择相应的类
+    if cache_method == "Fb":
+        # 创建FBCache
+        cached_blocks = FBCachedTransformerBlocks(
+            transformer_blocks,
+            single_transformer_blocks=single_transformer_blocks,
+            transformer=transformer,
+            rel_l1_thresh=cache_threshold,
+            return_hidden_states_first=False,
+            num_steps=num_steps
+        )
+        print(f"Applied FBCache to transformer with threshold {cache_threshold}")
+    
+    elif cache_method == "Tea":
+        # 创建TeaCache
+        cached_blocks = TeaCachedTransformerBlocks(
+            transformer_blocks,
+            single_transformer_blocks=single_transformer_blocks,
+            transformer=transformer,
+            rel_l1_thresh=cache_threshold,
+            return_hidden_states_first=False,
+            num_steps=num_steps
+        )
+        print(f"Applied TeaCache to transformer with threshold {cache_threshold}")
+    
+    elif cache_method == "Fast":
+        # 创建FastCache
+        cached_blocks = FastCachedTransformerBlocks(
+            transformer_blocks,
+            single_transformer_blocks=single_transformer_blocks,
+            transformer=transformer,
+            rel_l1_thresh=cache_threshold,
+            return_hidden_states_first=False,
+            num_steps=num_steps,
+            motion_threshold=motion_threshold
+        )
+        print(f"Applied FastCache to transformer with threshold {cache_threshold}, motion {motion_threshold}")
+    
     else:
-        print("WARNING: Could not find suitable transformer module in the model")
+        print(f"Unknown cache method: {cache_method}")
+        return model, None
     
-    return model, accelerators
+    # 用缓存块替换原来的块
+    dummy_single_blocks = torch.nn.ModuleList() if single_transformer_blocks else None
+    
+    # 保存原始的forward函数
+    original_forward = transformer.forward
+    
+    # 创建新的forward函数
+    def new_forward(self, *args, **kwargs):
+        # 暂时替换transformer_blocks
+        temp_blocks = self.transformer_blocks
+        temp_single_blocks = self.single_transformer_blocks if hasattr(self, "single_transformer_blocks") else None
+        
+        # 设置缓存块
+        self.transformer_blocks = cached_blocks
+        if hasattr(self, "single_transformer_blocks"):
+            self.single_transformer_blocks = dummy_single_blocks
+        
+        # 调用原始forward
+        try:
+            result = original_forward(*args, **kwargs)
+        finally:
+            # 恢复原始块
+            self.transformer_blocks = temp_blocks
+            if hasattr(self, "single_transformer_blocks"):
+                self.single_transformer_blocks = temp_single_blocks
+        
+        # 收集统计数据
+        if hasattr(cached_blocks, "cnt"):
+            stats_collector["total"] = int(cached_blocks.cnt.item())
+        if hasattr(cached_blocks, "use_cache"):
+            stats_collector["hits"] = int(cached_blocks.use_cache.sum().item())
+        
+        return result
+    
+    # 替换forward函数
+    transformer.forward = new_forward.__get__(transformer)
+    
+    return model, stats_collector
 
 def get_model_for_method(args, method, original_model=None):
-    """Get a model instance with the specified cache method applied"""
+    """获取应用了指定缓存方法的模型实例"""
     if original_model is not None and method == "None":
-        # Return the original model for baseline
+        # 对于基线，返回原始模型
         return original_model, None
     
-    # Load a fresh model instance
+    # 加载一个新的模型实例
     if args.model_type == "sd3":
         model = StableDiffusion3Pipeline.from_pretrained(
             args.model,
@@ -120,38 +200,24 @@ def get_model_for_method(args, method, original_model=None):
             torch_dtype=torch.float16,
         ).to("cuda")
     
-    # Apply cache method
-    accelerators = None
+    # 应用缓存方法
+    stats_collector = None
     
     if method == "None":
-        # No caching - use as baseline
+        # 不使用缓存 - 用作基线
         pass
     
-    # elif method == "Fast":
-    #     # Apply FastCache directly
-    #     model, accelerators = apply_fastcache(
-    #         model, 
-    #         cache_threshold=args.cache_ratio_threshold,
-    #         motion_threshold=args.motion_threshold
-    #     )
-    
     elif method in ["Fb", "Tea", "Fast"]:
-        # Apply FB/Tea cache using flux adapter
-        if hasattr(model, "transformer"):
-            # Try to use the flux adapter
-            apply_cache_on_transformer(
-                model.transformer,
-                rel_l1_thresh=args.cache_ratio_threshold,
-                return_hidden_states_first=False,
-                num_steps=args.num_inference_steps,
-                use_cache=method,
-                motion_threshold=args.motion_threshold
-            )
-            print(f"Applied {method}Cache to transformer through flux adapter")
-        else:
-            print(f"WARNING: Could not apply {method}Cache to model (no transformer found)")
+        # 应用缓存方法
+        model, stats_collector = apply_cache(
+            model,
+            cache_method=method,
+            cache_threshold=args.cache_ratio_threshold,
+            motion_threshold=args.motion_threshold,
+            num_steps=args.num_inference_steps
+        )
     
-    return model, accelerators
+    return model, stats_collector
 
 def main():
     args = parse_args()
@@ -192,7 +258,7 @@ def main():
         method_name = "Baseline" if method == "None" else f"{method}Cache"
         
         # Get model with cache method applied
-        model, accelerators = get_model_for_method(args, method, baseline_model)
+        model, stats_collector = get_model_for_method(args, method, baseline_model)
         
         # Run inference with timing
         print(f"Running inference with {method_name} ({args.num_inference_steps} steps)...")
@@ -229,38 +295,25 @@ def main():
             "inference_time": inference_time,
         }
         
-        # Add cache-specific stats for FastCache
-        if method == "Fast" and accelerators:
-            cache_stats = {}
-            total_hits = 0
-            total_steps = 0
+        # Add cache-specific stats
+        if method != "None" and stats_collector:
+            hits = stats_collector.get("hits", 0)
+            total = stats_collector.get("total", 0)
+            hit_ratio = hits / total if total > 0 else 0
             
-            for name, acc in accelerators:
-                hits = acc.cache_hits
-                steps = acc.total_steps
-                total_hits += hits
-                total_steps += steps
-                if steps > 0:
-                    cache_stats[name] = {
-                        "hits": int(hits),
-                        "steps": int(steps),
-                        "hit_ratio": float(hits/steps)
-                    }
+            stats["cache_stats"] = {
+                "hits": hits,
+                "total": total,
+                "hit_ratio": hit_ratio
+            }
             
-            if total_steps > 0:
-                cache_stats["overall"] = {
-                    "hits": int(total_hits),
-                    "steps": int(total_steps),
-                    "hit_ratio": float(total_hits/total_steps)
-                }
-            
-            stats["cache_stats"] = cache_stats
             stats["cache_threshold"] = args.cache_ratio_threshold
-            stats["motion_threshold"] = args.motion_threshold
+            if method == "Fast":
+                stats["motion_threshold"] = args.motion_threshold
             
-            if total_steps > 0:
+            if total > 0:
                 print(f"\nCache hit statistics:")
-                print(f"Overall: {total_hits}/{total_steps} hits ({total_hits/total_steps:.2%})")
+                print(f"Hits: {hits}/{total} ({hit_ratio:.2%})")
         
         # Store results
         results[method] = stats
