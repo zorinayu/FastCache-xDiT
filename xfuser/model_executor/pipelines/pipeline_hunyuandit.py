@@ -31,12 +31,10 @@ from xfuser.core.distributed import (
     get_world_group
 )
 from xfuser.model_executor.pipelines import xFuserPipelineBaseWrapper
-from .register import xFuserPipelineWrapperRegister
 
 logger = init_logger(__name__)
 
 
-@xFuserPipelineWrapperRegister.register(HunyuanDiTPipeline)
 class xFuserHunyuanDiTPipeline(xFuserPipelineBaseWrapper):
 
     @classmethod

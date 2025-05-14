@@ -50,77 +50,61 @@ class xFuserPipelineWrapperRegister:
                     return cls._registry[base]
         return xFuserPipelineBaseWrapper
 
-
-# Register basic diffusers pipeline
-from diffusers import DiffusionPipeline
-
+# Register base pipeline wrapper
 xFuserPipelineWrapperRegister.register(DiffusionPipeline, xFuserPipelineBaseWrapper)
 
-# Register Hunyuan DiT Pipeline
+# Import pipeline implementations here to avoid circular imports
+# These imports should be below the xFuserPipelineWrapperRegister class definition
+from .fastcache_pipeline import xFuserFastCachePipelineWrapper
+from .dit_pipeline import (
+    xFuserHunyuanDiTPipelineWrapper,
+    xFuserPixArtAlphaPipelineWrapper,
+    xFuserPixArtSigmaPipelineWrapper,
+    xFuserStableDiffusion3PipelineWrapper,
+    xFuserFluxPipelineWrapper,
+    xFuserLattePipelineWrapper,
+    xFuserCogVideoXPipelineWrapper,
+    xFuserConsisIDPipelineWrapper,
+    xFuserStableDiffusionXLPipelineWrapper,
+)
+
+# Now import the actual pipeline implementations for registration
 try:
-    from diffusers import HunyuanDiTPipeline
+    # Import without causing circular imports
+    from diffusers import DiffusionPipeline, HunyuanDiTPipeline, PixArtAlphaPipeline, PixArtSigmaPipeline
+    from diffusers import StableDiffusion3Pipeline, FluxPipeline, LattePipeline, CogVideoXPipeline
+    from diffusers import ConsisIDPipeline, StableDiffusionXLPipeline
+    
+    # Register specific pipeline wrappers
+    if 'HunyuanDiTPipeline' in locals():
+        xFuserPipelineWrapperRegister.register(HunyuanDiTPipeline, xFuserHunyuanDiTPipelineWrapper)
+    
+    if 'PixArtAlphaPipeline' in locals():
+        xFuserPipelineWrapperRegister.register(PixArtAlphaPipeline, xFuserPixArtAlphaPipelineWrapper)
+    
+    if 'PixArtSigmaPipeline' in locals():
+        xFuserPipelineWrapperRegister.register(PixArtSigmaPipeline, xFuserPixArtSigmaPipelineWrapper)
+    
+    if 'StableDiffusion3Pipeline' in locals():
+        xFuserPipelineWrapperRegister.register(StableDiffusion3Pipeline, xFuserStableDiffusion3PipelineWrapper)
+    
+    if 'FluxPipeline' in locals():
+        xFuserPipelineWrapperRegister.register(FluxPipeline, xFuserFluxPipelineWrapper)
+    
+    if 'LattePipeline' in locals():
+        xFuserPipelineWrapperRegister.register(LattePipeline, xFuserLattePipelineWrapper)
+    
+    if 'CogVideoXPipeline' in locals():
+        xFuserPipelineWrapperRegister.register(CogVideoXPipeline, xFuserCogVideoXPipelineWrapper)
+    
+    if 'ConsisIDPipeline' in locals():
+        xFuserPipelineWrapperRegister.register(ConsisIDPipeline, xFuserConsisIDPipelineWrapper)
+    
+    if 'StableDiffusionXLPipeline' in locals():
+        xFuserPipelineWrapperRegister.register(StableDiffusionXLPipeline, xFuserStableDiffusionXLPipelineWrapper)
 
-    xFuserPipelineWrapperRegister.register(HunyuanDiTPipeline, xFuserHunyuanDiTPipelineWrapper)
-except ImportError:
-    pass
+except ImportError as e:
+    logger.warning(f"Some diffusers pipelines could not be imported: {e}")
 
-try:
-    from diffusers import PixArtAlphaPipeline
-
-    xFuserPipelineWrapperRegister.register(PixArtAlphaPipeline, xFuserPixArtAlphaPipelineWrapper)
-except ImportError:
-    pass
-
-try:
-    from diffusers import PixArtSigmaPipeline
-
-    xFuserPipelineWrapperRegister.register(PixArtSigmaPipeline, xFuserPixArtSigmaPipelineWrapper)
-except ImportError:
-    pass
-
-try:
-    from diffusers import StableDiffusion3Pipeline
-
-    xFuserPipelineWrapperRegister.register(
-        StableDiffusion3Pipeline, xFuserStableDiffusion3PipelineWrapper
-    )
-except ImportError:
-    pass
-
-try:
-    from diffusers import FluxPipeline
-
-    xFuserPipelineWrapperRegister.register(FluxPipeline, xFuserFluxPipelineWrapper)
-except ImportError:
-    pass
-
-try:
-    from diffusers import LattePipeline
-
-    xFuserPipelineWrapperRegister.register(LattePipeline, xFuserLattePipelineWrapper)
-except ImportError:
-    pass
-
-try:
-    from diffusers import CogVideoXPipeline
-
-    xFuserPipelineWrapperRegister.register(CogVideoXPipeline, xFuserCogVideoXPipelineWrapper)
-except ImportError:
-    pass
-
-try:
-    from diffusers import ConsisIDPipeline
-    xFuserPipelineWrapperRegister.register(ConsisIDPipeline, xFuserConsisIDPipelineWrapper)
-except ImportError:
-    pass
-
-try:
-    from diffusers import StableDiffusionXLPipeline
-    xFuserPipelineWrapperRegister.register(StableDiffusionXLPipeline, xFuserStableDiffusionXLPipelineWrapper)
-except ImportError:
-    pass
-
-# Register FastCache pipeline wrapper
-# This can be used with any pipeline type as it's an enhancement wrapper
-from diffusers import DiffusionPipeline
+# Register FastCache as a general wrapper
 xFuserPipelineWrapperRegister.register(DiffusionPipeline, xFuserFastCachePipelineWrapper)
