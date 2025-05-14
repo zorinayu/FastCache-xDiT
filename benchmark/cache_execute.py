@@ -40,7 +40,7 @@ def parse_args():
     parser.add_argument("--cache_methods", type=str, nargs="+", 
                         choices=["None", "Fast", "Fb", "Tea", "All"], 
                         default=["All"])
-    parser.add_argument("--cache_ratio_threshold", type=float, default=0.05)
+    parser.add_argument("--cache_ratio_threshold", type=float, default=0.15) #0.05
     parser.add_argument("--motion_threshold", type=float, default=0.1)
     parser.add_argument("--output_dir", type=str, default="cache_execute_results")
     
@@ -203,16 +203,6 @@ def main():
             method_time = results[method]["inference_time"]
             speedup = baseline_time / method_time if method != "None" else 1.0
             print(f"{results[method]['method']:<15} {method_time:<10.2f} {speedup:<10.2f}x")
-
-# 仅用于测试DiTFastAttn的帮助函数（未完全实现）
-def test_ditfastattn():
-    """
-    DiTFastAttn是一种注意力计算优化方法，而不是直接的缓存方法
-    这个函数仅用于展示，实际上需要特定实现
-    """
-    print("DiTFastAttn is an attention computation optimization rather than a caching method.")
-    print("It requires specific implementation for the model's attention mechanism.")
-    print("Check README.md or docs/methods/ditfastattn.md for more information.")
 
 if __name__ == "__main__":
     main() 
