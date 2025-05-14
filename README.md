@@ -7,10 +7,8 @@
 
   </p>
   <h3>FastCache-xDiT: A Plug-and-Play Acceleration Method for Diffusion Transformers</h3>
-  <a href="#cite-us">📝 Papers</a> | <a href="#QuickStart">🚀 Quick Start</a> | <a href="#support-dits">🎯 Supported DiTs</a> | <a href="#fastcache-overview">⚡ FastCache</a> | <a href="https://github.com/xdit-project/xDiT/discussions">📈 Discussion </a> | <a href="https://medium.com/@xditproject">📝 Blogs</a></strong>
+  <a href="#cite-us">📝 Papers</a> | <a href="#QuickStart">🚀 Quick Start</a> | <a href="#support-dits">🎯 Supported DiTs</a> | <a href="#fastcache-overview">⚡ FastCache </a></strong>
   <p></p>
-
-[![](https://dcbadge.limes.pink/api/server/https://discord.gg/YEWzWfCF9S)](https://discord.gg/YEWzWfCF9S)
 
 </div>
 
@@ -65,29 +63,32 @@ FastCache-xDiT operates on two levels:
 
 FastCache computes a motion-aware saliency metric by comparing hidden states between timesteps:
 
-```
-S_var = max(|X - X_prev|)
-```
+$$S_{var} = \max(|X - X_{prev}|)$$
 
 An adaptive threshold determines which tokens require full computation:
 
-```
-τ_adaptive = β₀ + β₁S_var + β₂t + β₃t²
-```
+$$\tau_{adaptive} = \beta_0 + \beta_1 S_{var} + \beta_2 t + \beta_3 t^2$$
+
+Where:
+- $\beta_0, \beta_1, \beta_2, \beta_3$ are learnable parameters
+- $t$ is the current diffusion timestep
+- $S_{var}$ is the motion-aware saliency metric
 
 ### Transformer-Level Caching
 
 For caching decisions at the transformer block level, FastCache computes a relative change metric:
 
-```
-δₜ = ‖Hₜ - Hₜ₋₁‖_F / ‖Hₜ₋₁‖_F
-```
+$$\delta_t = \frac{\|H_t - H_{t-1}\|_F}{\|H_{t-1}\|_F}$$
 
 A statistical test based on chi-square distribution determines when caching can be applied safely:
 
-```
-(ND)δₜ² ≤ χ²ₙₘ₂,₁₋α
-```
+$$ND\delta_t^2 \leq \chi^2_{nm^2, 1-\alpha}$$
+
+Where:
+- $N$ is the batch size
+- $D$ is the hidden dimension size
+- $\delta_t$ is the relative change metric
+- $\chi^2_{nm^2, 1-\alpha}$ is the chi-square threshold with $nm^2$ degrees of freedom
 
 For more details, see our [FastCache documentation](./docs/methods/fastcache.md).
 
@@ -106,10 +107,10 @@ pip install "xfuser[diffusers,flash-attn]"  # With both diffusers and flash atte
 
 ```python
 from xfuser.model_executor.pipelines.fastcache_pipeline import xFuserFastCachePipelineWrapper
-from diffusers import StableDiffusion3Pipeline
+from diffusers import PixArtSigmaPipeline
 
 # Load your diffusion model
-model = StableDiffusion3Pipeline.from_pretrained("stabilityai/stable-diffusion-3-medium-diffusers")
+model = PixArtSigmaPipeline.from_pretrained("PixArt-alpha/PixArt-Sigma-XL-2-1024-MS")
 
 # Create FastCache wrapper
 fastcache_wrapper = xFuserFastCachePipelineWrapper(model)
@@ -133,13 +134,13 @@ print(stats)
 
 #### Command Line Usage
 
-Run FastCache with Stable Diffusion 3:
+Run FastCache with PixArt Sigma:
 
 ```bash
 # Basic usage
 python examples/run_fastcache_test.py \
-    --model_type sd3 \
-    --model "stabilityai/stable-diffusion-3-medium-diffusers" \
+    --model_type pixart \
+    --model "PixArt-alpha/PixArt-Sigma-XL-2-1024-MS" \
     --prompt "a photo of an astronaut riding a horse on the moon" \
     --num_inference_steps 30 \
     --cache_method "Fast" \
@@ -147,7 +148,7 @@ python examples/run_fastcache_test.py \
     --motion_threshold 0.1
 
 # Using the convenience benchmark script to compare different cache methods
-./examples/run_fastcache_benchmark.sh sd3
+./examples/run_fastcache_benchmark.sh pixart
 ```
 
 Run FastCache with Flux model:
@@ -171,8 +172,8 @@ python examples/run_fastcache_test.py \
 
 | Argument | Description | Default |
 |----------|-------------|---------|
-| `--model_type` | Model type (`sd3` or `flux`) | `sd3` |
-| `--model` | Model path or name | `stabilityai/stable-diffusion-3-medium-diffusers` |
+| `--model_type` | Model type (`pixart`, `flux`) | `pixart` |
+| `--model` | Model path or name | `PixArt-alpha/PixArt-Sigma-XL-2-1024-MS` |
 | `--prompt` | Text prompt for image generation | `a photo of an astronaut riding a horse on the moon` |
 | `--num_inference_steps` | Number of inference steps | `30` |
 | `--cache_method` | Cache method (`None`, `Fast`, `Fb`, `Tea`) | `Fast` |
@@ -188,8 +189,8 @@ python examples/run_fastcache_test.py \
 Compare FastCache with other acceleration methods:
 
 ```bash
-# Run on Stable Diffusion 3
-./examples/run_fastcache_benchmark.sh sd3
+# Run on PixArt Sigma
+./examples/run_fastcache_benchmark.sh pixart
 
 # Run on Flux model
 ./examples/run_fastcache_benchmark.sh flux
@@ -303,3 +304,7 @@ If you use FastCache-xDiT in your research or applications, please cite:
   year={2025}
 }
 ```
+
+## Contact
+
+For questions about FastCache-xDiT, please contact [dong.liu.dl2367@yale.edu](mailto:dong.liu.dl2367@yale.edu).

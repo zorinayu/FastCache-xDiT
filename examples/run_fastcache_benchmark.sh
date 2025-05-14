@@ -9,9 +9,10 @@ NUM_STEPS=30
 OUTPUT_DIR="fastcache_benchmark_results"
 
 # Parse command-line arguments
-if [ "$1" == "sd3" ]; then
-    MODEL_TYPE="sd3"
-    MODEL="stabilityai/stable-diffusion-3-medium-diffusers"
+if [ "$1" == "pixart" ]; then
+    MODEL_TYPE="pixart"
+    MODEL="PixArt-alpha/PixArt-Sigma-XL-2-1024-MS"
+    PROMPT="a photo of an astronaut riding a horse on the moon"
 fi
 
 # Create output directory
