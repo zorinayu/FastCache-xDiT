@@ -3,7 +3,7 @@
   <p align="center">
 
   <picture>
-    <img alt="FastCache-xDiT" src="https://raw.githubusercontent.com/xdit-project/xdit_assets/main/XDiTlogo.png" width="50%">
+    <img alt="FastCache-xDiT" src="assets/logo.jpeg" width="50%">
 
   </p>
   <h3>FastCache-xDiT: A Plug-and-Play Acceleration Method for Diffusion Transformers</h3>
