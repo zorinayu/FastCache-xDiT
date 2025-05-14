@@ -263,22 +263,15 @@ FastCache-xDiT is fully compatible with the parallel acceleration methods provid
 
 We provide a step-by-step guide for adding new models, please refer to the following tutorial.
 
-[Apply xDiT to new models](./docs/developer/adding_models/readme.md)
-
-A high-level design of xDiT framework is provided below, which may help you understand the xDiT framework.
-
-[The implement and design of xdit framework](./docs/developer/The_implement_design_of_xdit_framework.md)
-
 <h2 id="cite-us">📝 Cite Us</h2>
 
 If you use FastCache-xDiT in your research or applications, please cite:
 
 ```bibtex
 @inproceedings{liu2025fastcache,
-  title={FastCache: Adaptive Spatial-Temporal Caching for Diffusion Transformer Acceleration},
+  title={FastCache: Cache What Matters, Skip What Doesn't.},
   author={Liu, Dong and Zhang, Jiayi and Li, Yifan and Yu, Yanxuan and Lengerich, Ben and Wu, Ying Nian},
   booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) Workshops},
-  pages={},
   year={2025}
 }
 ```
