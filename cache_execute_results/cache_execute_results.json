@@ -7,8 +7,8 @@
     "steps": 20,
     "resolution": "768x768",
     "seed": 42,
-    "inference_time": 3.2271392345428467,
-    "cache_threshold": 0.05
+    "inference_time": 3.27103328704834,
+    "cache_threshold": 0.15
   },
   "Fast": {
     "method": "FastCache",
@@ -18,8 +18,8 @@
     "steps": 20,
     "resolution": "768x768",
     "seed": 42,
-    "inference_time": 2.4717016220092773,
-    "cache_threshold": 0.05,
+    "inference_time": 2.409297227859497,
+    "cache_threshold": 0.15,
     "motion_threshold": 0.1
   },
   "Fb": {
@@ -30,8 +30,8 @@
     "steps": 20,
     "resolution": "768x768",
     "seed": 42,
-    "inference_time": 2.4040687084198,
-    "cache_threshold": 0.05
+    "inference_time": 2.4304535388946533,
+    "cache_threshold": 0.15
   },
   "Tea": {
     "method": "TeaCache",
@@ -41,7 +41,7 @@
     "steps": 20,
     "resolution": "768x768",
     "seed": 42,
-    "inference_time": 2.417621374130249,
-    "cache_threshold": 0.05
+    "inference_time": 2.43148136138916,
+    "cache_threshold": 0.15
   }
 }
