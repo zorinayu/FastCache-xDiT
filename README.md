@@ -78,21 +78,23 @@ Where:
 
 For caching decisions at the transformer block level, FastCache computes a relative change metric:
 
-<div align="center">
-<img src="https://render.githubusercontent.com/render/math?math=\delta_t = \frac{\|H_t - H_{t-1}\|_F}{\|H_{t-1}\|_F}" alt="delta_t = ||H_t - H_{t-1}||_F / ||H_{t-1}||_F">
-</div>
+```
+δ_t = ||H_t - H_{t-1}||_F / ||H_{t-1}||_F
+```
+
+Where `||·||_F` is the Frobenius norm, `H_t` is the hidden state at time t, and `H_{t-1}` is the hidden state at time t-1.
 
 A statistical test based on chi-square distribution determines when caching can be applied safely:
 
-<div align="center">
-<img src="https://render.githubusercontent.com/render/math?math=ND\delta_t^2 \leq \chi^2_{nm^2, 1-\alpha}" alt="ND delta_t^2 <= chi^2_{nm^2, 1-alpha}">
-</div>
+```
+N·D·(δ_t)² ≤ χ²_{nm², 1-α}
+```
 
 Where:
-- $N$ is the batch size
-- $D$ is the hidden dimension size
-- $\delta_t$ is the relative change metric
-- $\chi^2_{nm^2, 1-\alpha}$ is the chi-square threshold with $nm^2$ degrees of freedom
+- `N` is the batch size
+- `D` is the hidden dimension size
+- `δ_t` is the relative change metric
+- `χ²_{nm², 1-α}` is the chi-square threshold with nm² degrees of freedom
 
 For more details, see our [FastCache documentation](./docs/methods/fastcache.md).
 
