@@ -102,6 +102,8 @@ pip install "xfuser[diffusers,flash-attn]"  # With both diffusers and flash atte
 
 ### 2. Using FastCache Acceleration
 
+#### Python API
+
 ```python
 from xfuser.model_executor.pipelines.fastcache_pipeline import xFuserFastCachePipelineWrapper
 from diffusers import StableDiffusion3Pipeline
@@ -129,9 +131,59 @@ stats = fastcache_wrapper.get_cache_statistics()
 print(stats)
 ```
 
+#### Command Line Usage
+
+Run FastCache with Stable Diffusion 3:
+
+```bash
+# Basic usage
+python examples/fastcache_benchmark.py \
+    --model_type sd3 \
+    --model "stabilityai/stable-diffusion-3-medium-diffusers" \
+    --prompt "a photo of an astronaut riding a horse on the moon" \
+    --num_inference_steps 30 \
+    --cache_ratio_threshold 0.05 \
+    --motion_threshold 0.1
+
+# Using the convenience script
+./examples/run_fastcache_benchmark.sh
+```
+
+Run FastCache with Flux model:
+
+```bash
+# Basic usage
+python examples/fastcache_benchmark.py \
+    --model_type flux \
+    --model "black-forest-labs/FLUX.1-schnell" \
+    --prompt "a serene landscape with mountains and a lake" \
+    --num_inference_steps 30 \
+    --cache_ratio_threshold 0.05 \
+    --motion_threshold 0.1
+
+# Using the convenience script
+./examples/run_fastcache_benchmark.sh flux
+```
+
+#### Command Line Arguments
+
+| Argument | Description | Default |
+|----------|-------------|---------|
+| `--model_type` | Model type (`sd3` or `flux`) | `sd3` |
+| `--model` | Model path or name | `stabilityai/stable-diffusion-3-medium-diffusers` |
+| `--prompt` | Text prompt for image generation | `a photo of an astronaut riding a horse on the moon` |
+| `--num_inference_steps` | Number of inference steps | `30` |
+| `--seed` | Random seed | `0` |
+| `--batch_size` | Batch size | `1` |
+| `--height` | Image height | `768` |
+| `--width` | Image width | `768` |
+| `--cache_ratio_threshold` | FastCache ratio threshold | `0.05` |
+| `--motion_threshold` | FastCache motion threshold | `0.1` |
+| `--output_dir` | Output directory for results | `fastcache_benchmark_results` |
+
 ### 3. Benchmark FastCache
 
-We provide a benchmark script to compare FastCache with other acceleration methods:
+Compare FastCache with other acceleration methods:
 
 ```bash
 # Run on Stable Diffusion 3
@@ -140,6 +192,13 @@ We provide a benchmark script to compare FastCache with other acceleration metho
 # Run on Flux model
 ./examples/run_fastcache_benchmark.sh flux
 ```
+
+The benchmark will:
+- Run baseline model without acceleration
+- Run with FastCache acceleration
+- Run with TeaCache and First-Block-Cache (for Flux model)
+- Generate comparison images and performance statistics
+- Create timing charts in the output directory
 
 ### 4. Combining with Parallel Methods
 

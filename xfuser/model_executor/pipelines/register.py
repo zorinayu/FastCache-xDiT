@@ -3,7 +3,17 @@ from diffusers.pipelines.pipeline_utils import DiffusionPipeline
 
 from xfuser.logger import init_logger
 from .base_pipeline import xFuserPipelineBaseWrapper
-from xfuser.model_executor.pipelines.dit_pipeline import (
+from .pipeline_hunyuandit import xFuserHunyuanDiTPipeline
+from .pipeline_pixart_alpha import xFuserPixArtAlphaPipeline
+from .pipeline_pixart_sigma import xFuserPixArtSigmaPipeline
+from .pipeline_stable_diffusion_3 import xFuserStableDiffusion3Pipeline
+from .pipeline_flux import xFuserFluxPipeline
+from .pipeline_latte import xFuserLattePipeline
+from .pipeline_cogvideox import xFuserCogVideoXPipeline
+from .pipeline_consisid import xFuserConsisIDPipeline
+from .pipeline_stable_diffusion_xl import xFuserStableDiffusionXLPipeline
+from .fastcache_pipeline import xFuserFastCachePipelineWrapper
+from .dit_pipeline import (
     xFuserHunyuanDiTPipelineWrapper,
     xFuserPixArtAlphaPipelineWrapper,
     xFuserPixArtSigmaPipelineWrapper,
@@ -14,7 +24,6 @@ from xfuser.model_executor.pipelines.dit_pipeline import (
     xFuserConsisIDPipelineWrapper,
     xFuserStableDiffusionXLPipelineWrapper,
 )
-from xfuser.model_executor.pipelines.fastcache_pipeline import xFuserFastCachePipelineWrapper
 
 logger = init_logger(__name__)
 
