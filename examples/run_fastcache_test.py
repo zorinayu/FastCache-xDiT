@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT_DIR))
 
 # Try to import necessary modules
 try:
-    from diffusers import StableDiffusion3Pipeline, FluxPipeline
+    from diffusers import StableDiffusion3Pipeline, FluxPipeline, PixArtSigmaPipeline
 except ImportError:
     print("Warning: diffusers library not properly installed, make sure you have diffusers>=0.30.0")
 
@@ -27,8 +27,8 @@ except ImportError:
 
 def parse_args():
     parser = argparse.ArgumentParser(description="FastCache Simple Test")
-    parser.add_argument("--model_type", type=str, choices=["sd3", "flux"], default="sd3")
-    parser.add_argument("--model", type=str, required=True)
+    parser.add_argument("--model_type", type=str, choices=["sd3", "flux", "pixart"], default="pixart")
+    parser.add_argument("--model", type=str, default=None)
     parser.add_argument("--prompt", type=str, default="a beautiful landscape with mountains and a lake")
     parser.add_argument("--num_inference_steps", type=int, default=30)
     parser.add_argument("--height", type=int, default=768)
@@ -38,7 +38,19 @@ def parse_args():
     parser.add_argument("--cache_ratio_threshold", type=float, default=0.05)
     parser.add_argument("--motion_threshold", type=float, default=0.1)
     parser.add_argument("--output_dir", type=str, default="fastcache_test_results")
-    return parser.parse_args()
+    
+    args = parser.parse_args()
+    
+    # Set default model based on model_type if not provided
+    if args.model is None:
+        if args.model_type == "sd3":
+            args.model = "stabilityai/stable-diffusion-3-medium-diffusers"
+        elif args.model_type == "flux":
+            args.model = "black-forest-labs/FLUX.1-schnell"
+        elif args.model_type == "pixart":
+            args.model = "PixArt-alpha/PixArt-Sigma-XL-2-1024-MS"
+    
+    return args
 
 def create_accelerator(module, cache_threshold=0.05, motion_threshold=0.1):
     """Create a FastCache accelerator directly without using the registration mechanism"""
@@ -53,10 +65,14 @@ def apply_direct_fastcache(model, cache_threshold=0.05, motion_threshold=0.1):
     """Apply FastCache directly to transformer blocks in the model"""
     accelerators = []
     
-    # Find and apply FastCache to transformer blocks in unet
+    # Find and apply FastCache to transformer blocks
+    target_module = None
     if hasattr(model, "unet"):
-        transformer = model.unet
-        
+        target_module = model.unet
+    elif hasattr(model, "transformer"):
+        target_module = model.transformer
+    
+    if target_module is not None:
         # Recursively find and apply FastCache to transformer blocks
         def apply_fastcache(module, prefix=''):
             for name, child in module.named_children():
@@ -80,8 +96,10 @@ def apply_direct_fastcache(model, cache_threshold=0.05, motion_threshold=0.1):
                     # Recursively process child modules
                     apply_fastcache(child, full_name)
         
-        apply_fastcache(transformer)
+        apply_fastcache(target_module)
         print(f"Applied FastCache to {len(accelerators)} transformer blocks")
+    else:
+        print("WARNING: Could not find suitable transformer module in the model")
     
     return model, accelerators
 
@@ -106,6 +124,11 @@ def main():
             ).to("cuda")
         elif args.model_type == "flux":
             model = FluxPipeline.from_pretrained(
+                args.model,
+                torch_dtype=torch.float16,
+            ).to("cuda")
+        elif args.model_type == "pixart":
+            model = PixArtSigmaPipeline.from_pretrained(
                 args.model,
                 torch_dtype=torch.float16,
             ).to("cuda")
