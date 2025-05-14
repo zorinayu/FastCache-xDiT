@@ -20,8 +20,8 @@ except ImportError:
 
 # Import the cache modules directly
 try:
-    from xfuser.model_executor.accelerator.fastcache import FastCacheAccelerator
-    from xfuser.model_executor.cache.utils import FBCachedTransformerBlocks, TeaCachedTransformerBlocks
+    # from xfuser.model_executor.accelerator.fastcache import FastCacheAccelerator
+    from xfuser.model_executor.cache.utils import FBCachedTransformerBlocks, TeaCachedTransformerBlocks, FastCachedTransformerBlocks
     from xfuser.model_executor.cache.diffusers_adapters.flux import apply_cache_on_transformer
 except ImportError:
     print("Warning: xfuser cache modules not found")
