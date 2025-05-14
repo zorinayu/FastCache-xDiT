@@ -245,7 +245,7 @@ result = paralleler(prompt="your prompt", num_inference_steps=30)
 
 </div>
 
-<h2 id="parallel">📈 xDiT's Parallel Methods</h2>
+<h2 id="parallel">📈 FastCache-xDiT's Cache Methods</h2>
 
 FastCache-xDiT is fully compatible with the parallel acceleration methods provided by xDiT, this repo offers multiple cache-based acceleration methods:
 
