@@ -51,9 +51,8 @@ FastCache delivers significant speedups across popular DiT models:
 
 | Model | Baseline | FastCache | TeaCache | First-Block-Cache |
 |-------|----------|-----------|----------|------------------|
-| SD3-Medium | 12.4s | 7.3s (1.7x) | N/A | N/A |
 | Flux.1 | 9.8s | 6.2s (1.6x) | 7.1s (1.4x) | 7.5s (1.3x) |
-| PixArt Sigma | 10.6s | 6.7s (1.6x) | N/A | N/A |
+| PixArt Sigma | 10.6s | 6.7s (1.6x) | 6.9s/(1.6x) | 6.8s/(1.6x) |
 
 <h2 id="technical-details">🧠 Technical Details</h2>
 
@@ -236,7 +235,6 @@ result = paralleler(prompt="your prompt", num_inference_steps=30)
 
 | Model Name | FastCache | CFG | SP | PipeFusion | Performance Report Link |
 | --- | --- | --- | --- | --- | --- |
-| [🟠 Stable Diffusion 3](https://huggingface.co/stabilityai/stable-diffusion-3-medium-diffusers) | ✅ | ✔️ | ✔️ | ✔️ | [Report](./docs/performance/sd3.md) |
 | [🟠 Flux](https://huggingface.co/black-forest-labs/FLUX.1-schnell) | ✅ | NA | ✔️ | ✔️ | [Report](./docs/performance/flux.md) |
 | [🔴 PixArt-Sigma](https://huggingface.co/PixArt-alpha/PixArt-Sigma-XL-2-1024-MS) | ✅ | ✔️ | ✔️ | ✔️ | [Report](./docs/performance/pixart_alpha_legacy.md) |
 | [🎬 HunyuanDiT-v1.2-Diffusers](https://huggingface.co/Tencent-Hunyuan/HunyuanDiT-v1.2-Diffusers) | ✅ | ✔️ | ✔️ | ✔️ | [Report](./docs/performance/hunyuandit.md) |
