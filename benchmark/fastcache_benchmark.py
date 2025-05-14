@@ -127,15 +127,15 @@ def get_model_for_method(args, method, original_model=None):
         # No caching - use as baseline
         pass
     
-    elif method == "Fast":
-        # Apply FastCache directly
-        model, accelerators = apply_fastcache(
-            model, 
-            cache_threshold=args.cache_ratio_threshold,
-            motion_threshold=args.motion_threshold
-        )
+    # elif method == "Fast":
+    #     # Apply FastCache directly
+    #     model, accelerators = apply_fastcache(
+    #         model, 
+    #         cache_threshold=args.cache_ratio_threshold,
+    #         motion_threshold=args.motion_threshold
+    #     )
     
-    elif method in ["Fb", "Tea"]:
+    elif method in ["Fb", "Tea", "Fast"]:
         # Apply FB/Tea cache using flux adapter
         if hasattr(model, "transformer"):
             # Try to use the flux adapter
