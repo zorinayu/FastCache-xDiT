@@ -1,0 +1,8 @@
+{
+  "Fast": {
+    "method": "FastCache",
+    "model": "THUDM/CogVideoX1.5-5B",
+    "model_type": "cogvideox",
+    "error": "('Connection broken: IncompleteRead(1903412842 bytes read, 3085906838 more expected)', IncompleteRead(1903412842 bytes read, 3085906838 more expected))"
+  }
+}

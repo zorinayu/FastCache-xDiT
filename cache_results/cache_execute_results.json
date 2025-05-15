@@ -1,0 +1,47 @@
+{
+  "None": {
+    "method": "Baseline",
+    "model": "PixArt-alpha/PixArt-Sigma-XL-2-1024-MS",
+    "model_type": "pixart",
+    "prompt": "a beautiful landscape with mountains and a lake",
+    "steps": 20,
+    "resolution": "512x512",
+    "seed": 42,
+    "inference_time": 3.2585086822509766,
+    "cache_threshold": 0.15
+  },
+  "Fast": {
+    "method": "FastCache",
+    "model": "PixArt-alpha/PixArt-Sigma-XL-2-1024-MS",
+    "model_type": "pixart",
+    "prompt": "a beautiful landscape with mountains and a lake",
+    "steps": 20,
+    "resolution": "512x512",
+    "seed": 42,
+    "inference_time": 2.4255940914154053,
+    "cache_threshold": 0.15,
+    "motion_threshold": 0.1
+  },
+  "Fb": {
+    "method": "FbCache",
+    "model": "PixArt-alpha/PixArt-Sigma-XL-2-1024-MS",
+    "model_type": "pixart",
+    "prompt": "a beautiful landscape with mountains and a lake",
+    "steps": 20,
+    "resolution": "512x512",
+    "seed": 42,
+    "inference_time": 2.4019992351531982,
+    "cache_threshold": 0.15
+  },
+  "Tea": {
+    "method": "TeaCache",
+    "model": "PixArt-alpha/PixArt-Sigma-XL-2-1024-MS",
+    "model_type": "pixart",
+    "prompt": "a beautiful landscape with mountains and a lake",
+    "steps": 20,
+    "resolution": "512x512",
+    "seed": 42,
+    "inference_time": 2.4119205474853516,
+    "cache_threshold": 0.15
+  }
+}
