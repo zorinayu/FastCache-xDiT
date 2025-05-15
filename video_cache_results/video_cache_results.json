@@ -1,4 +1,16 @@
 {
+  "None": {
+    "method": "Baseline",
+    "model": "THUDM/CogVideoX1.5-5B",
+    "model_type": "cogvideox",
+    "prompt": "a dog running in a field",
+    "steps": 20,
+    "frames": 16,
+    "resolution": "512x512",
+    "seed": 42,
+    "inference_time": 8.280106782913208,
+    "cache_threshold": 0.15
+  },
   "Fast": {
     "method": "FastCache",
     "model": "THUDM/CogVideoX1.5-5B",
@@ -8,8 +20,32 @@
     "frames": 16,
     "resolution": "512x512",
     "seed": 42,
-    "inference_time": 8.29629397392273,
+    "inference_time": 7.937376499176025,
     "cache_threshold": 0.15,
     "motion_threshold": 0.1
+  },
+  "Fb": {
+    "method": "FbCache",
+    "model": "THUDM/CogVideoX1.5-5B",
+    "model_type": "cogvideox",
+    "prompt": "a dog running in a field",
+    "steps": 20,
+    "frames": 16,
+    "resolution": "512x512",
+    "seed": 42,
+    "inference_time": 7.939940929412842,
+    "cache_threshold": 0.15
+  },
+  "Tea": {
+    "method": "TeaCache",
+    "model": "THUDM/CogVideoX1.5-5B",
+    "model_type": "cogvideox",
+    "prompt": "a dog running in a field",
+    "steps": 20,
+    "frames": 16,
+    "resolution": "512x512",
+    "seed": 42,
+    "inference_time": 7.922530889511108,
+    "cache_threshold": 0.15
   }
 }
