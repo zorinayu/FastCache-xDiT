@@ -257,6 +257,46 @@ FastCache-xDiT is fully compatible with the parallel acceleration methods provid
 
 4. **DiTFastAttn**: Reduces attention computation by leveraging redundancies between different steps of the Diffusion Model.
 
+### Using FastCache for Video Generation
+
+FastCache also works with video generation models. Here are examples of how to use it with different video DiT models:
+
+```bash
+# Using FastCache with StepVideo
+python benchmark/video_cache_execute.py \
+  --model_type stepvideo \
+  --prompt "a dog running in a field" \
+  --cache_methods Fast \
+  --num_inference_steps 20 \
+  --num_frames 16 \
+  --height 256 \
+  --width 256 \
+  --cache_ratio_threshold 0.15
+
+# Using FastCache with CogVideoX
+python benchmark/video_cache_execute.py \
+  --model_type cogvideox \
+  --prompt "a dog running in a field" \
+  --cache_methods Fast \
+  --num_inference_steps 20 \
+  --num_frames 16
+
+# Using FastCache with ConsisID
+python benchmark/video_cache_execute.py \
+  --model_type consisid \
+  --prompt "a time lapse of a blooming flower" \
+  --cache_methods Fast \
+  --num_inference_steps 20 \
+  --num_frames 16
+
+# Compare all cache methods (None, Fast, Fb, Tea) on video generation
+python benchmark/video_cache_execute.py \
+  --model_type stepvideo \
+  --cache_methods All \
+  --num_frames 16 \
+  --num_inference_steps 20
+```
+
 [DiTFastAttn: Attention Compression for Diffusion Transformer Models](./docs/methods/ditfastattn.md)
 
 <h2 id="dev-guide">📚 Develop Guide</h2>
