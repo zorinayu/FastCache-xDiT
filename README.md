@@ -173,6 +173,19 @@ python examples/run_fastcache_test.py \
 ./examples/run_fastcache_benchmark.sh flux
 ```
 
+### 2. Using FastCache Acceleration Benchmark compared to other Acceleration Methods
+
+```bash
+python benchmark/cache_execute.py \
+  --model_type pixart \
+  --cache_methods None Fast Fb Tea \
+  --num_inference_steps 20 \
+  --height 512 \
+  --width 512 \
+  --output_dir cache_results
+```
+
+
 #### Command Line Arguments
 
 | Argument | Description | Default |
@@ -255,8 +268,6 @@ FastCache-xDiT is fully compatible with the parallel acceleration methods provid
 
 3. **First-Block-Cache**: Caches the output of early transformer blocks across timesteps.
 
-4. **DiTFastAttn**: Reduces attention computation by leveraging redundancies between different steps of the Diffusion Model.
-
 ### Using FastCache for Video Generation
 
 FastCache also works with video generation models. Here are examples of how to use it with different video DiT models:
@@ -296,8 +307,6 @@ python benchmark/video_cache_execute.py \
   --num_frames 16 \
   --num_inference_steps 20
 ```
-
-[DiTFastAttn: Attention Compression for Diffusion Transformer Models](./docs/methods/ditfastattn.md)
 
 <h2 id="dev-guide">📚 Develop Guide</h2>
 
