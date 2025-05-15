@@ -78,7 +78,7 @@ This spatial token reduction significantly reduces computation by only applying 
 
 For each transformer block, FastCache computes a relative change metric between current and previous hidden states:
 
-$$\delta_{t,l} = \frac{\|H_{t,l-1} - H_{t-1,l-1}\|_F}{\|H_{t-1,l-1}\|_F}$$
+$$\delta_{t,l} = \frac{\Vert H_{t,l-1} - H_{t-1,l-1}\Vert_F}{\Vert H_{t-1,l-1}\Vert_F}$$
 
 Under statistical assumptions, this metric follows a scaled $\chi^2$ distribution:
 
