@@ -1,62 +1,35 @@
 from xfuser.config import xFuserArgs, EngineConfig
 from xfuser.parallel import xDiTParallel
 
-# 使用函数导入模式来避免循环导入
-def _import_pipelines():
-    """延迟导入所有pipeline类，避免循环导入问题"""
-    from xfuser.model_executor.pipelines import (
-        xFuserPixArtAlphaPipeline,
-        xFuserPixArtSigmaPipeline,
-        xFuserStableDiffusion3Pipeline,
-        xFuserFluxPipeline,
-        xFuserLattePipeline,
-        xFuserHunyuanDiTPipeline,
-        xFuserCogVideoXPipeline,
-        xFuserConsisIDPipeline,
-        xFuserStableDiffusionXLPipeline
-    )
-    
-    # 返回所有导入的类供外部使用
-    return {
-        "xFuserPixArtAlphaPipeline": xFuserPixArtAlphaPipeline,
-        "xFuserPixArtSigmaPipeline": xFuserPixArtSigmaPipeline,
-        "xFuserStableDiffusion3Pipeline": xFuserStableDiffusion3Pipeline,
-        "xFuserFluxPipeline": xFuserFluxPipeline,
-        "xFuserLattePipeline": xFuserLattePipeline,
-        "xFuserHunyuanDiTPipeline": xFuserHunyuanDiTPipeline,
-        "xFuserCogVideoXPipeline": xFuserCogVideoXPipeline,
-        "xFuserConsisIDPipeline": xFuserConsisIDPipeline,
-        "xFuserStableDiffusionXLPipeline": xFuserStableDiffusionXLPipeline,
-    }
+# Define a lazy import mechanism to avoid circular imports
+class LazyImport:
+    def __init__(self, module_name, target_name):
+        self.module_name = module_name
+        self.target_name = target_name
+        self._module = None
 
-# 创建一个用来统一管理延迟导入的类
-class LazyPipelinesImporter:
-    def __init__(self):
-        self._modules = None
-        
+    def __call__(self, *args, **kwargs):
+        if self._module is None:
+            module = __import__(self.module_name, fromlist=[self.target_name])
+            self._module = getattr(module, self.target_name)
+        return self._module(*args, **kwargs)
+
     def __getattr__(self, name):
-        # 首次访问任何属性时，才执行导入
-        if self._modules is None:
-            self._modules = _import_pipelines()
-        
-        if name in self._modules:
-            return self._modules[name]
-        
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+        if self._module is None:
+            module = __import__(self.module_name, fromlist=[self.target_name])
+            self._module = getattr(module, self.target_name)
+        return getattr(self._module, name)
 
-# 创建延迟导入对象
-_lazy_pipelines = LazyPipelinesImporter()
-
-# 为了向后兼容，在模块级别导出pipeline类
-xFuserPixArtAlphaPipeline = property(lambda _: _lazy_pipelines.xFuserPixArtAlphaPipeline)
-xFuserPixArtSigmaPipeline = property(lambda _: _lazy_pipelines.xFuserPixArtSigmaPipeline)
-xFuserStableDiffusion3Pipeline = property(lambda _: _lazy_pipelines.xFuserStableDiffusion3Pipeline)
-xFuserFluxPipeline = property(lambda _: _lazy_pipelines.xFuserFluxPipeline)
-xFuserLattePipeline = property(lambda _: _lazy_pipelines.xFuserLattePipeline)
-xFuserHunyuanDiTPipeline = property(lambda _: _lazy_pipelines.xFuserHunyuanDiTPipeline)
-xFuserCogVideoXPipeline = property(lambda _: _lazy_pipelines.xFuserCogVideoXPipeline)
-xFuserConsisIDPipeline = property(lambda _: _lazy_pipelines.xFuserConsisIDPipeline)
-xFuserStableDiffusionXLPipeline = property(lambda _: _lazy_pipelines.xFuserStableDiffusionXLPipeline)
+# Configure lazy imports for pipeline classes
+xFuserPixArtAlphaPipeline = LazyImport("xfuser.model_executor.pipelines.pipeline_pixart_alpha", "xFuserPixArtAlphaPipeline")
+xFuserPixArtSigmaPipeline = LazyImport("xfuser.model_executor.pipelines.pipeline_pixart_sigma", "xFuserPixArtSigmaPipeline")
+xFuserStableDiffusion3Pipeline = LazyImport("xfuser.model_executor.pipelines.pipeline_stable_diffusion_3", "xFuserStableDiffusion3Pipeline")
+xFuserFluxPipeline = LazyImport("xfuser.model_executor.pipelines.pipeline_flux", "xFuserFluxPipeline")
+xFuserLattePipeline = LazyImport("xfuser.model_executor.pipelines.pipeline_latte", "xFuserLattePipeline")
+xFuserHunyuanDiTPipeline = LazyImport("xfuser.model_executor.pipelines.pipeline_hunyuandit", "xFuserHunyuanDiTPipeline")
+xFuserCogVideoXPipeline = LazyImport("xfuser.model_executor.pipelines.pipeline_cogvideox", "xFuserCogVideoXPipeline")
+xFuserConsisIDPipeline = LazyImport("xfuser.model_executor.pipelines.pipeline_consisid", "xFuserConsisIDPipeline")
+xFuserStableDiffusionXLPipeline = LazyImport("xfuser.model_executor.pipelines.pipeline_stable_diffusion_xl", "xFuserStableDiffusionXLPipeline")
 
 __all__ = [
     "xFuserPixArtAlphaPipeline",

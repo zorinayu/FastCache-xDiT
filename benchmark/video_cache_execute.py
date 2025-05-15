@@ -13,20 +13,38 @@ import imageio
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-# Try to import necessary modules
+# Try to import necessary diffusers classes directly without going through xfuser imports
 try:
+    # Import directly from diffusers
     from diffusers import (
+        DiffusionPipeline,
         StepVideoGenerationPipeline,
-        CogVideoXPipeline,
-        ConsisIDPipeline,
     )
+    # Try to import CogVideoX and ConsisID separately since they might be missing in some versions
+    try:
+        from diffusers import CogVideoXPipeline
+    except ImportError:
+        print("CogVideoXPipeline not available in this diffusers version")
+        
+    try:
+        from diffusers import ConsisIDPipeline
+    except ImportError:
+        print("ConsisIDPipeline not available in this diffusers version")
 except ImportError:
-    print("Warning: diffusers library not properly installed or video models not available")
+    print("Warning: diffusers library not properly installed")
 
-# 导入cache相关函数
+# 导入cache相关函数，避免通过pipeline模块导入
 try:
-    # 直接从flux.py导入缓存应用函数
+    # 直接导入FastCache的实现，避免循环导入
+    from xfuser.model_executor.cache.utils import (
+        FastCachedTransformerBlocks,
+        TeaCachedTransformerBlocks, 
+        FBCachedTransformerBlocks
+    )
+    
+    # 导入应用缓存的函数
     from xfuser.model_executor.cache.diffusers_adapters.flux import apply_cache_on_transformer
+    
     cache_modules_available = True
     print("Successfully imported cache modules from xfuser")
 except ImportError as e:
@@ -76,24 +94,25 @@ def apply_cache_to_model(model, cache_method, rel_l1_thresh=0.15, num_steps=20, 
         print(f"Warning: Cache modules not available, cannot apply {cache_method}")
         return model
     
-    if not hasattr(model, "transformer"):
-        # 尝试找到transformer组件
-        if hasattr(model, "unet") and hasattr(model.unet, "transformer"):
-            transformer = model.unet.transformer
-        elif hasattr(model, "text_to_video_unet") and hasattr(model.text_to_video_unet, "transformer"):
-            transformer = model.text_to_video_unet.transformer
-        else:
-            print(f"Warning: Cannot find transformer component in model, cannot apply {cache_method}")
-            return model
-    else:
-        transformer = model.transformer
-    
     if cache_method == "None":
         # 不应用缓存
         return model
     
+    # 查找模型的transformer组件
+    transformer = None
+    if hasattr(model, "transformer"):
+        transformer = model.transformer
+    elif hasattr(model, "unet") and hasattr(model.unet, "transformer"):
+        transformer = model.unet.transformer
+    elif hasattr(model, "text_to_video_unet") and hasattr(model.text_to_video_unet, "transformer"):
+        transformer = model.text_to_video_unet.transformer
+    
+    if transformer is None:
+        print(f"Warning: Cannot find transformer component in model, cannot apply {cache_method}")
+        return model
+    
     try:
-        # 直接使用flux.py中的函数
+        # 应用缓存
         apply_cache_on_transformer(
             transformer,
             rel_l1_thresh=rel_l1_thresh,
@@ -167,26 +186,32 @@ def load_video_model(args):
                 args.model,
                 torch_dtype=torch.float16,
             ).to("cuda")
-        elif args.model_type == "cogvideox":
+            return model
+        elif args.model_type == "cogvideox" and 'CogVideoXPipeline' in globals():
             model = CogVideoXPipeline.from_pretrained(
                 args.model,
                 torch_dtype=torch.float16,
             ).to("cuda")
-        elif args.model_type == "consisid":
+            return model
+        elif args.model_type == "consisid" and 'ConsisIDPipeline' in globals():
             model = ConsisIDPipeline.from_pretrained(
                 args.model,
                 torch_dtype=torch.float16,
             ).to("cuda")
+            return model
         else:
-            raise ValueError(f"Unsupported model type: {args.model_type}")
-        
-        return model
+            print(f"Model type {args.model_type} not directly supported, trying generic pipeline")
+            # Fallback to generic pipeline
+            model = DiffusionPipeline.from_pretrained(
+                args.model,
+                torch_dtype=torch.float16,
+            ).to("cuda")
+            return model
     except Exception as e:
         print(f"Error loading model: {e}")
         print("Falling back to generic diffusers import...")
         
         # 尝试通用导入方法
-        from diffusers import DiffusionPipeline
         model = DiffusionPipeline.from_pretrained(
             args.model,
             torch_dtype=torch.float16,

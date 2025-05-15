@@ -24,14 +24,12 @@ from xfuser.core.distributed import (
     get_sp_group,
     is_dp_last_group,
 )
-from xfuser.model_executor.pipelines import xFuserPipelineBaseWrapper
+from xfuser.model_executor.pipelines.base_pipeline import xFuserPipelineBaseWrapper
 
-# 删除对register的直接导入以避免循环依赖
+# Remove direct import from register to avoid circular dependency
 # from .register import xFuserPipelineWrapperRegister
 
-
-# 将装饰器改为函数调用方式，以避免在模块加载时就需要register模块
-# @xFuserPipelineWrapperRegister.register(CogVideoXPipeline)
+# Define the pipeline class directly without using decorator
 class xFuserCogVideoXPipeline(xFuserPipelineBaseWrapper):
     @classmethod
     def from_pretrained(
@@ -417,16 +415,14 @@ class xFuserCogVideoXPipeline(xFuserPipelineBaseWrapper):
         return self._guidance_scale
 
 
-# 模块加载完成后，在底部添加与register相关的代码，避免循环导入
-def _register_pipeline():
-    """注册当前pipeline到xfuser注册表"""
+# Register the pipeline at the end when other modules are loaded
+def register_cogvideox_pipeline():
     try:
+        # Try to import the register module at runtime to avoid circular imports
         from .register import xFuserPipelineWrapperRegister
-        if CogVideoXPipeline is not None and xFuserCogVideoXPipeline is not None:
-            xFuserPipelineWrapperRegister.register(CogVideoXPipeline, xFuserCogVideoXPipeline)
-    except ImportError:
-        # 如果register还未导入，我们可以跳过注册，稍后会由register模块执行
-        pass
+        xFuserPipelineWrapperRegister.register(CogVideoXPipeline, xFuserCogVideoXPipeline)
+    except ImportError as e:
+        print(f"Warning: Unable to register CogVideoXPipeline: {e}")
 
-# 尝试执行注册
-_register_pipeline()
+# Try to register the pipeline when this module is imported
+register_cogvideox_pipeline()

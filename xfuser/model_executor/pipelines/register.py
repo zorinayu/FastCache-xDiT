@@ -35,8 +35,29 @@ class xFuserPipelineWrapperRegister:
     _loaded = False
 
     @classmethod
-    def register(cls, pipeline_class, wrapper_class):
-        cls._registry[pipeline_class] = wrapper_class
+    def register(cls, pipeline_class, wrapper_class=None):
+        """
+        Register a pipeline class with its wrapper.
+        Can be used as a decorator or a function.
+        
+        Examples:
+            # As a function
+            xFuserPipelineWrapperRegister.register(PixArtAlphaPipeline, xFuserPixArtAlphaPipelineWrapper)
+            
+            # As a decorator
+            @xFuserPipelineWrapperRegister.register(PixArtAlphaPipeline)
+            class xFuserPixArtAlphaPipeline(xFuserPipelineBaseWrapper):
+                pass
+        """
+        # When used as a decorator
+        if wrapper_class is None:
+            def decorator(wrapper_cls):
+                cls._registry[pipeline_class] = wrapper_cls
+                return wrapper_cls
+            return decorator
+        # When used as a function
+        else:
+            cls._registry[pipeline_class] = wrapper_class
 
     @classmethod
     def get_class(cls, pipeline):
