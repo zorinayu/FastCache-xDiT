@@ -3,6 +3,13 @@
     "method": "FastCache",
     "model": "THUDM/CogVideoX1.5-5B",
     "model_type": "cogvideox",
-    "error": "('Connection broken: IncompleteRead(1903412842 bytes read, 3085906838 more expected)', IncompleteRead(1903412842 bytes read, 3085906838 more expected))"
+    "prompt": "a dog running in a field",
+    "steps": 20,
+    "frames": 16,
+    "resolution": "512x512",
+    "seed": 42,
+    "inference_time": 8.29629397392273,
+    "cache_threshold": 0.15,
+    "motion_threshold": 0.1
   }
 }
