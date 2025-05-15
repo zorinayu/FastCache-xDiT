@@ -288,14 +288,31 @@ class FastCachedTransformerBlocks(CachedTransformerBlocks):
         self.beta2 = -0.002
         self.beta3 = 0.00005
         
-        # Linear approximation for static tokens
+        # 统计计算所需的参数
+        self.confidence_level = 0.95  # 1 - alpha, 置信度
+        self.z_score = 1.96  # z-score for 95% confidence
+
+        # 统计Transformer嵌套层的数量和隐藏层大小
+        self.num_layers = len(transformer_blocks)
+        
+        # Linear approximation for static tokens and transformer block outputs
         if hasattr(transformer_blocks[0], "config"):
             hidden_size = transformer_blocks[0].config.hidden_size
         else:
             # Estimate hidden size from the first block
-            hidden_size = next(transformer_blocks[0].parameters()).shape[-1]
-            
-        self.cache_projection = torch.nn.Linear(hidden_size, hidden_size).cuda()
+            try:
+                hidden_size = next(transformer_blocks[0].parameters()).shape[-1]
+            except:
+                hidden_size = 1024  # 默认值
+
+        # 创建可学习的线性投影层（per-block linear approximation）
+        self.block_projections = torch.nn.ModuleList([
+            torch.nn.Linear(hidden_size, hidden_size).cuda() 
+            for _ in range(self.num_layers)
+        ])
+        
+        # 创建空间token减少模块的线性投影
+        self.spatial_projection = torch.nn.Linear(hidden_size, hidden_size).cuda()
 
     def get_start_idx(self) -> int:
         return 0  # Process all blocks when not caching
@@ -316,19 +333,30 @@ class FastCachedTransformerBlocks(CachedTransformerBlocks):
         if t1 is None or t2 is None:
             return torch.tensor(False, dtype=torch.bool).cuda()
             
-        # Compute relative change (Frobenius norm)
-        delta = self.l1_distance(t1, t2)
+        # 计算相对变化（Frobenius范数）
+        # δ_{t,l} = ||H_{t,l-1} - H_{t-1,l-1}||_F / ||H_{t-1,l-1}||_F
+        diff_norm = torch.norm(t1 - t2, p='fro')
+        prev_norm = torch.norm(t2, p='fro')
         
+        # 避免除以零
+        if prev_norm == 0:
+            delta = torch.tensor(float('inf')).cuda()
+        else:
+            delta = (diff_norm / prev_norm)
+            
         # Update total steps counter
         self.total_steps += 1
         
-        # Compute statistical threshold based on chi-square
+        # 计算统计阈值
+        # (ND) · δ_{t,l}^2 ~ χ^2_{ND}
+        # 对于大自由度，可以用正态分布近似卡方分布
         n, d = t1.shape[0], t1.shape[1]  # token count, hidden dim
         dof = n * d  # degrees of freedom
         
-        # Approximate chi-square threshold using normal distribution for large DOF
-        z = 1.96  # z-score for 95% confidence
-        chi2_threshold = dof + z * math.sqrt(2 * dof)
+        # chi2_threshold = χ^2_{ND, 1-α}
+        chi2_threshold = dof + self.z_score * math.sqrt(2 * dof)
+        
+        # 根据公式计算阈值: δ_{t,l}^2 ≤ χ^2_{ND, 1-α}/ND
         statistical_threshold = math.sqrt(chi2_threshold / dof)
         
         # Adaptive threshold based on variance and timestep
@@ -337,7 +365,7 @@ class FastCachedTransformerBlocks(CachedTransformerBlocks):
         # Final threshold combines statistical validity with adaptive behavior
         final_threshold = max(threshold, min(statistical_threshold, adaptive_threshold))
         
-        # Cache decision
+        # Cache decision - 如果相对变化小于阈值，则使用缓存
         use_cache = delta <= final_threshold
         
         # Update cache hits counter
@@ -346,17 +374,19 @@ class FastCachedTransformerBlocks(CachedTransformerBlocks):
         return use_cache
 
     def compute_motion_saliency(self, hidden_states):
-        """Compute motion saliency for spatial token reduction"""
+        """Compute motion saliency for spatial token reduction
+           S_t = ||X_t - X_{t-1}||_2^2 
+        """
         if self.cache_context.prev_hidden_states is None:
             return torch.ones(hidden_states.shape[1], device=hidden_states.device)
             
-        # Compute token-wise differences
-        token_diffs = (hidden_states - self.cache_context.prev_hidden_states).abs()
+        # 计算空间token的显著性（逐token计算差异平方和）
+        token_diffs = (hidden_states - self.cache_context.prev_hidden_states)**2
         
-        # Take max across feature dimension to get token saliency
-        token_saliency = token_diffs.max(dim=-1)[0].squeeze(0)
+        # 沿特征维度求和得到每个token的显著性
+        token_saliency = token_diffs.sum(dim=-1).squeeze(0)
         
-        # Normalize saliency
+        # 归一化显著性
         if token_saliency.max() > 0:
             token_saliency = token_saliency / token_saliency.max()
             
@@ -371,46 +401,50 @@ class FastCachedTransformerBlocks(CachedTransformerBlocks):
             self.cache_context.prev_hidden_states = hidden_states.detach().clone()
             return hidden_states, None, hidden_states, encoder_hidden_states
         
-        # Compute motion saliency and mask for token reduction
+        # 计算token显著性，用于空间token减少
         motion_saliency = self.compute_motion_saliency(hidden_states)
+        
+        # 基于阈值将token分为静态和运动两类
+        # M_t = {i : S_t^(i) > τ_s}, X_t^m = X_t[M_t], X_t^s = X_t[M_t^c]
         self.cache_context.static_token_mask = motion_saliency <= self.motion_threshold
         
-        # Update cached states
+        # Update cached states for next iteration
         self.cache_context.prev_hidden_states = hidden_states.detach().clone()
         
         return hidden_states, prev_hidden_states, hidden_states, encoder_hidden_states
     
     def process_blocks(self, start_idx: int, hidden: torch.Tensor, encoder: torch.Tensor, *args, **kwargs):
-        """Override to implement spatial token reduction for FastCache"""
-        # If using cache, shortcut and return
+        """Override to implement space-time FastCache"""
+        # 如果使用transformer级缓存，直接使用线性投影
         if self.use_cache:
-            return hidden, encoder
+            # H_{t,l} = W_l H_{t,l-1} + b_l (线性近似)
+            return self.block_projections[0](hidden), encoder
         
-        # Check if we can use spatial token reduction
+        # 空间Token减少：检查是否可以对部分token使用spatial减少
         static_mask = self.cache_context.static_token_mask
         if static_mask is not None and static_mask.any() and not static_mask.all():
             batch_size, seq_len, hidden_dim = hidden.shape
             
-            # Split tokens into motion and static
+            # 将token分为motion和static两部分
             motion_indices = torch.where(~static_mask)[0]
             static_indices = torch.where(static_mask)[0]
             
             if len(motion_indices) > 0:
-                # Get motion tokens
+                # 获取运动token
                 motion_hidden = hidden.index_select(1, motion_indices)
                 motion_encoder = encoder.index_select(1, motion_indices) if encoder is not None else None
                 
-                # Process motion tokens through transformer blocks
-                processed_motion_hidden, processed_motion_encoder = super().process_blocks(
+                # 通过完整的transformer块处理运动token
+                processed_motion_hidden, processed_motion_encoder = self.process_transformer_blocks(
                     start_idx, motion_hidden, motion_encoder, *args, **kwargs
                 )
                 
-                # Process static tokens through linear projection
+                # 使用线性投影处理静态token: H_t^s = W_c X_t^s + b_c
                 static_hidden = hidden.index_select(1, static_indices)
                 static_encoder = encoder.index_select(1, static_indices) if encoder is not None else None
-                static_hidden = self.cache_projection(static_hidden)
+                static_hidden = self.spatial_projection(static_hidden)
                 
-                # Combine results
+                # 合并结果
                 result_hidden = hidden.clone()
                 result_hidden.index_copy_(1, motion_indices, processed_motion_hidden)
                 result_hidden.index_copy_(1, static_indices, static_hidden)
@@ -422,5 +456,52 @@ class FastCachedTransformerBlocks(CachedTransformerBlocks):
                 
                 return result_hidden, result_encoder
         
-        # Fall back to normal processing
-        return super().process_blocks(start_idx, hidden, encoder, *args, **kwargs)
+        # 如果没有空间token减少，则走正常的transformer处理流程
+        return self.process_transformer_blocks(start_idx, hidden, encoder, *args, **kwargs)
+    
+    def process_transformer_blocks(self, start_idx: int, hidden: torch.Tensor, encoder: torch.Tensor, *args, **kwargs):
+        """Process hidden states through transformer blocks with per-block caching"""
+        current_hidden, current_encoder = hidden, encoder
+        
+        # 对每个transformer块分别决定是否使用缓存
+        for i, block in enumerate(self.transformer_blocks[start_idx:], start=start_idx):
+            # 如果有previous hidden states，计算相对变化并决定是否使用缓存
+            if self.cache_context.prev_hidden_states is not None:
+                # 计算相对变化
+                prev_hidden = self.cache_context.prev_hidden_states
+                delta = self.compute_relative_change(current_hidden, prev_hidden)
+                
+                # 基于统计检验决定是否使用线性近似（可学习缓存）
+                if delta <= self.rel_l1_thresh:
+                    # 使用线性投影近似
+                    current_hidden = self.block_projections[i](current_hidden)
+                    self.cache_hits += 1
+                    continue
+            
+            # 完整执行transformer处理
+            current_hidden, current_encoder = block(current_hidden, current_encoder, *args, **kwargs)
+            current_hidden, current_encoder = (current_hidden, current_encoder) if self.return_hidden_states_first else (current_encoder, current_hidden)
+        
+        # 处理single_transformer_blocks如果存在
+        if self.single_transformer_blocks:
+            current_hidden = torch.cat([current_encoder, current_hidden], dim=1)
+            for block in self.single_transformer_blocks:
+                current_hidden = block(current_hidden, *args, **kwargs)
+            current_encoder, current_hidden = current_hidden.split([current_encoder.shape[1], current_hidden.shape[1] - current_encoder.shape[1]], dim=1)
+        
+        return current_hidden, current_encoder
+    
+    def compute_relative_change(self, current, previous):
+        """计算当前和上一时间步隐藏状态的相对变化"""
+        if previous is None:
+            return float('inf')
+            
+        # 计算Frobenius范数
+        diff_norm = torch.norm(current - previous, p='fro')
+        prev_norm = torch.norm(previous, p='fro')
+        
+        # 避免除以零
+        if prev_norm == 0:
+            return float('inf')
+            
+        return (diff_norm / prev_norm).item()
