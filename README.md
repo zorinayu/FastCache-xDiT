@@ -56,46 +56,72 @@ FastCache delivers significant speedups across popular DiT models:
 
 <h2 id="technical-details">🧠 Technical Details</h2>
 
-FastCache-xDiT operates on two levels:
+FastCache-xDiT operates on two levels, using learnable parameters to approximate redundant computations:
 
 ### Spatial Token Reduction
 
 FastCache computes a motion-aware saliency metric by comparing hidden states between timesteps:
 
-$$S_{var} = \max(|X - X_{prev}|)$$
+$$S_t^{(i)} = \|X_t^{(i)} - X_{t-1}^{(i)}\|_2^2$$
 
-An adaptive threshold determines which tokens require full computation:
+Each token is classified as either motion or static based on a threshold $\tau_s$:
 
-$$\tau_{adaptive} = \beta_0 + \beta_1 S_{var} + \beta_2 t + \beta_3 t^2$$
+$$\mathcal{M}_t = \{i : S_t^{(i)} > \tau_s\}, \quad X_t^m = X_t[\mathcal{M}_t], \quad X_t^s = X_t[\bar{\mathcal{M}}_t]$$
 
-Where:
-- $\beta_0, \beta_1, \beta_2, \beta_3$ are learnable parameters
-- $t$ is the current diffusion timestep
-- $S_{var}$ is the motion-aware saliency metric
+Motion tokens $X_t^m$ are processed through the full transformer stack, while static tokens $X_t^s$ are processed with a learnable linear projection:
+
+$$H_t^s = W_s X_t^s + b_s$$
+
+This spatial token reduction significantly reduces computation by only applying full transformer processing to tokens with significant changes.
 
 ### Transformer-Level Caching
 
-For caching decisions at the transformer block level, FastCache computes a relative change metric:
+For each transformer block, FastCache computes a relative change metric between current and previous hidden states:
+
+$$\delta_{t,l} = \frac{\|H_{t,l-1} - H_{t-1,l-1}\|_F}{\|H_{t-1,l-1}\|_F}$$
+
+Under statistical assumptions, this metric follows a scaled $\chi^2$ distribution:
+
+$$(ND) \cdot \delta_{t,l}^2 \sim \chi^2_{ND}$$
+
+FastCache applies a cache decision rule: for confidence level $1-\alpha$, the transformer block is skipped if:
+
+$$\delta_{t,l}^2 \leq \frac{\chi^2_{ND, 1-\alpha}}{ND}$$
+
+Instead of computing the full transformer block, FastCache uses a block-specific learnable linear projection:
+
+$$H_{t,l} = W_l H_{t,l-1} + b_l$$
+
+This provides a statistically sound method to decide when hidden states can be reused, while the learnable parameters ensure output quality is maintained.
+
+### Adaptive Thresholding
+
+FastCache includes an adaptive thresholding mechanism that adjusts based on timestep and variance:
+
+$$\tau_{adaptive} = \beta_0 + \beta_1 S_{var} + \beta_2 t + \beta_3 t^2$$
+
+Where $\beta_0$, $\beta_1$, $\beta_2$, and $\beta_3$ are parameters that control the adaptation, and $t$ is the timestep.
+
+### FastCache Algorithm
 
 ```
-δ_t = ||H_t - H_{t-1}||_F / ||H_{t-1}||_F
+Algorithm: FastCache
+Input: Hidden state H_t, previous hidden H_{t-1}, Transformer blocks, thresholds τ_s, α
+Output: Processed hidden state H_t^L
+
+1. Compute token-wise saliency S_t ← ||H_t - H_{t-1}||_2^2
+2. Partition tokens into motion tokens X_t^m and static tokens X_t^s based on τ_s
+3. Initialize H_{t,0} ← Concat(X_t^m, X_t^s)
+4. For l = 1 to L:
+   a. δ_{t,l} ← ||H_{t,l-1} - H_{t-1,l-1}||_F / ||H_{t-1,l-1}||_F
+   b. If δ_{t,l}^2 ≤ χ^2_{ND, 1-α}/ND:
+      i. H_{t,l} ← W_l H_{t,l-1} + b_l  (Linear approximation)
+   c. Else:
+      i. H_{t,l} ← Block_l(H_{t,l-1})  (Full computation)
+5. Return H_t^L
 ```
 
-Where `||·||_F` is the Frobenius norm, `H_t` is the hidden state at time t, and `H_{t-1}` is the hidden state at time t-1.
-
-A statistical test based on chi-square distribution determines when caching can be applied safely:
-
-```
-N·D·(δ_t)² ≤ χ²_{nm², 1-α}
-```
-
-Where:
-- `N` is the batch size
-- `D` is the hidden dimension size
-- `δ_t` is the relative change metric
-- `χ²_{nm², 1-α}` is the chi-square threshold with nm² degrees of freedom
-
-For more details, see our [FastCache documentation](./docs/methods/fastcache.md).
+This approach provides significant speedups (up to 1.7x) with minimal impact on generation quality by intelligently skipping redundant computations at both the token and transformer block levels.
 
 <h2 id="QuickStart">🚀 QuickStart</h2>
 
