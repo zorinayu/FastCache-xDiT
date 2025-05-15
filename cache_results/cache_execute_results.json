@@ -3,22 +3,22 @@
     "method": "Baseline",
     "model": "PixArt-alpha/PixArt-Sigma-XL-2-1024-MS",
     "model_type": "pixart",
-    "prompt": "a beautiful landscape with mountains and a lake",
+    "prompt": "one girl playing basketball",
     "steps": 20,
     "resolution": "512x512",
     "seed": 42,
-    "inference_time": 3.2585086822509766,
+    "inference_time": 3.259458065032959,
     "cache_threshold": 0.15
   },
   "Fast": {
     "method": "FastCache",
     "model": "PixArt-alpha/PixArt-Sigma-XL-2-1024-MS",
     "model_type": "pixart",
-    "prompt": "a beautiful landscape with mountains and a lake",
+    "prompt": "one girl playing basketball",
     "steps": 20,
     "resolution": "512x512",
     "seed": 42,
-    "inference_time": 2.4255940914154053,
+    "inference_time": 2.391512870788574,
     "cache_threshold": 0.15,
     "motion_threshold": 0.1
   },
@@ -26,22 +26,22 @@
     "method": "FbCache",
     "model": "PixArt-alpha/PixArt-Sigma-XL-2-1024-MS",
     "model_type": "pixart",
-    "prompt": "a beautiful landscape with mountains and a lake",
+    "prompt": "one girl playing basketball",
     "steps": 20,
     "resolution": "512x512",
     "seed": 42,
-    "inference_time": 2.4019992351531982,
+    "inference_time": 2.41239857673645,
     "cache_threshold": 0.15
   },
   "Tea": {
     "method": "TeaCache",
     "model": "PixArt-alpha/PixArt-Sigma-XL-2-1024-MS",
     "model_type": "pixart",
-    "prompt": "a beautiful landscape with mountains and a lake",
+    "prompt": "one girl playing basketball",
     "steps": 20,
     "resolution": "512x512",
     "seed": 42,
-    "inference_time": 2.4119205474853516,
+    "inference_time": 2.4223074913024902,
     "cache_threshold": 0.15
   }
 }

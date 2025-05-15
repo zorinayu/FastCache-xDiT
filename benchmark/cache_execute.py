@@ -32,7 +32,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Cache Execution Test")
     parser.add_argument("--model_type", type=str, choices=["sd3", "flux", "pixart"], default="pixart")
     parser.add_argument("--model", type=str, default=None)
-    parser.add_argument("--prompt", type=str, default="a beautiful landscape with mountains and a lake")
+    parser.add_argument("--prompt", type=str, default="one girl playing basketball") #"a beautiful landscape with mountains and a lake"
     parser.add_argument("--num_inference_steps", type=int, default=30)
     parser.add_argument("--height", type=int, default=768)
     parser.add_argument("--width", type=int, default=768)
