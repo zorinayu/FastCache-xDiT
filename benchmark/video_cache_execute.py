@@ -207,13 +207,32 @@ def save_video(frames, path, fps=8):
             frames = frames.frames
         elif hasattr(frames, "videos") and isinstance(frames.videos, list) and len(frames.videos) > 0:
             frames = frames.videos[0]
-            
-        # 如果是PIL图像列表，转换为numpy数组并堆叠
+        
+        # 处理嵌套列表结构
         if isinstance(frames, list):
+            # 打印更多调试信息
+            print(f"Frames type: {type(frames)}")
+            if len(frames) > 0:
+                print(f"First element type: {type(frames[0])}")
+                # 处理列表的列表情况
+                if isinstance(frames[0], list):
+                    print("Detected nested list structure, flattening...")
+                    flat_frames = []
+                    for sublist in frames:
+                        if isinstance(sublist, list):
+                            flat_frames.extend(sublist)
+                        else:
+                            flat_frames.append(sublist)
+                    frames = flat_frames
+                    print(f"Flattened frames length: {len(frames)}")
+                    if len(frames) > 0:
+                        print(f"First flattened element type: {type(frames[0])}")
+            
+            # 如果是PIL图像列表，转换为numpy数组并堆叠
             if len(frames) == 0:
                 raise ValueError("Empty frames list")
                 
-            if isinstance(frames[0], Image.Image):
+            if all(isinstance(frame, Image.Image) for frame in frames):
                 # 转换PIL图像列表为numpy数组
                 numpy_frames = []
                 for frame in frames:
@@ -222,31 +241,65 @@ def save_video(frames, path, fps=8):
                         numpy_frame = np.stack([numpy_frame] * 3, axis=-1)
                     numpy_frames.append(numpy_frame)
                 frames = np.stack(numpy_frames)
-            elif isinstance(frames[0], np.ndarray):
+                print(f"Converted PIL images to numpy array with shape: {frames.shape}")
+            elif all(isinstance(frame, np.ndarray) for frame in frames):
                 # 已经是numpy数组列表，直接堆叠
-                frames = np.stack(frames)
-                
+                try:
+                    frames = np.stack(frames)
+                    print(f"Stacked numpy arrays with shape: {frames.shape}")
+                except Exception as stack_error:
+                    print(f"Error stacking numpy arrays: {stack_error}")
+                    # 尝试确保所有数组具有相同的形状
+                    first_shape = frames[0].shape
+                    filtered_frames = [f for f in frames if f.shape == first_shape]
+                    if len(filtered_frames) > 0:
+                        frames = np.stack(filtered_frames)
+                        print(f"Stacked {len(filtered_frames)} compatible numpy arrays with shape: {frames.shape}")
+                    else:
+                        raise ValueError("Could not find compatible frames to stack")
+                        
         # 如果是torch.Tensor，转换为numpy
         if isinstance(frames, torch.Tensor):
             frames = frames.cpu().numpy()
             if frames.ndim == 4 and frames.shape[1] == 3:  # NCHW -> NHWC
                 frames = np.transpose(frames, (0, 2, 3, 1))
+            print(f"Converted torch tensor to numpy array with shape: {frames.shape}")
                 
         # 确保frames是numpy数组且具有正确的维度
         if not isinstance(frames, np.ndarray):
+            # 如果转换失败，尝试保存个别帧
+            print(f"Could not convert frames to numpy array, will save individual frames")
             raise TypeError(f"Failed to convert frames to numpy array, got {type(frames)}")
         
         if frames.ndim != 4:
-            raise ValueError(f"Expected 4D array (frames, height, width, channels), got shape {frames.shape}")
+            print(f"Expected 4D array (frames, height, width, channels), got shape {frames.shape}")
+            # 尝试修复维度问题
+            if frames.ndim == 3:
+                if frames.shape[0] == 3:  # 可能是单个CHW图像
+                    frames = np.transpose(frames, (1, 2, 0))  # HWC
+                    frames = frames[np.newaxis, ...]  # 添加批次维度
+                    print(f"Reshaped to 4D array with shape: {frames.shape}")
+                else:  # 假设是HWC格式的单个图像
+                    frames = frames[np.newaxis, ...]  # 添加批次维度
+                    print(f"Added batch dimension, new shape: {frames.shape}")
+            else:
+                raise ValueError(f"Cannot reshape {frames.shape} to 4D array")
             
         # 确保像素值在[0, 255]范围内且为uint8类型
         if frames.dtype != np.uint8:
-            if np.issubdtype(frames.dtype, np.floating) and frames.max() <= 1.0:
-                frames = (frames * 255).round().astype(np.uint8)
+            if np.issubdtype(frames.dtype, np.floating):
+                # 处理NaN值
+                frames = np.nan_to_num(frames, nan=0.0)
+                if frames.max() <= 1.0:
+                    frames = (frames * 255).round().astype(np.uint8)
+                else:
+                    frames = frames.round().astype(np.uint8)
             else:
                 frames = frames.astype(np.uint8)
+            print(f"Converted to uint8 array with shape: {frames.shape}")
         
         # 保存视频
+        print(f"Saving {len(frames)} frames to video at {path}")
         imageio.mimsave(path, frames, fps=fps)
         return True
     except Exception as e:
@@ -254,6 +307,7 @@ def save_video(frames, path, fps=8):
         # 尝试逐帧保存为图像（作为备份方法）
         save_dir = path.replace('.mp4', '')
         os.makedirs(save_dir, exist_ok=True)
+        print(f"Created directory for individual frames: {save_dir}")
         
         # 尝试获取可以保存的帧
         saveable_frames = frames
@@ -266,30 +320,72 @@ def save_video(frames, path, fps=8):
                 print(f"Cannot save individual frames: unknown type {type(saveable_frames)}")
                 return False
         
+        # 处理嵌套列表
+        if isinstance(saveable_frames, list) and len(saveable_frames) > 0 and isinstance(saveable_frames[0], list):
+            flat_frames = []
+            for sublist in saveable_frames:
+                if isinstance(sublist, list):
+                    flat_frames.extend(sublist)
+                else:
+                    flat_frames.append(sublist)
+            saveable_frames = flat_frames
+        
         # 逐帧保存
+        success_count = 0
         for i, frame in enumerate(saveable_frames):
             try:
-                # 确保每一帧是PIL图像
-                if not isinstance(frame, Image.Image):
-                    if isinstance(frame, torch.Tensor):
-                        frame = frame.cpu().numpy()
-                    if isinstance(frame, np.ndarray):
-                        if frame.ndim == 3 and frame.shape[0] == 3:  # CHW
-                            frame = np.transpose(frame, (1, 2, 0))
-                        # 确保是uint8格式
-                        if frame.dtype != np.uint8:
-                            if np.issubdtype(frame.dtype, np.floating) and frame.max() <= 1.0:
-                                frame = (frame * 255).round().astype(np.uint8)
-                            else:
-                                frame = frame.astype(np.uint8)
-                        frame = Image.fromarray(frame)
+                # 检查帧的类型
+                print(f"Frame {i} type: {type(frame)}")
                 
-                frame_path = f"{save_dir}/frame_{i:04d}.png"
-                frame.save(frame_path)
+                # 确保每一帧是PIL图像
+                frame_pil = None
+                if isinstance(frame, Image.Image):
+                    frame_pil = frame
+                elif isinstance(frame, torch.Tensor):
+                    frame_np = frame.cpu().numpy()
+                    # 处理不同的形状
+                    if frame_np.ndim == 3 and frame_np.shape[0] == 3:  # CHW
+                        frame_np = np.transpose(frame_np, (1, 2, 0))
+                    elif frame_np.ndim == 4:  # NCHW or NHWC
+                        if frame_np.shape[1] == 3:  # NCHW
+                            frame_np = np.transpose(frame_np[0], (1, 2, 0))
+                        else:  # NHWC
+                            frame_np = frame_np[0]
+                    # 确保是uint8格式
+                    if frame_np.dtype != np.uint8:
+                        frame_np = np.nan_to_num(frame_np, nan=0.0)
+                        if frame_np.max() <= 1.0:
+                            frame_np = (frame_np * 255).round().astype(np.uint8)
+                        else:
+                            frame_np = frame_np.round().astype(np.uint8)
+                    frame_pil = Image.fromarray(frame_np)
+                elif isinstance(frame, np.ndarray):
+                    # 处理不同的形状
+                    if frame.ndim == 3 and frame.shape[0] == 3:  # CHW
+                        frame = np.transpose(frame, (1, 2, 0))
+                    # 确保是uint8格式
+                    if frame.dtype != np.uint8:
+                        frame = np.nan_to_num(frame, nan=0.0)
+                        if frame.max() <= 1.0:
+                            frame = (frame * 255).round().astype(np.uint8)
+                        else:
+                            frame = frame.round().astype(np.uint8)
+                    frame_pil = Image.fromarray(frame)
+                else:
+                    print(f"Skipping frame {i}: unsupported type {type(frame)}")
+                    continue
+                
+                if frame_pil:
+                    frame_path = f"{save_dir}/frame_{i:04d}.png"
+                    frame_pil.save(frame_path)
+                    success_count += 1
+                else:
+                    print(f"Could not convert frame {i} to PIL image")
             except Exception as frame_e:
                 print(f"Error saving frame {i}: {frame_e}")
         
-        return False
+        print(f"Successfully saved {success_count} individual frames")
+        return success_count > 0
 
 def main():
     args = parse_args()
