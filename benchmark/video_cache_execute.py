@@ -17,7 +17,7 @@ sys.path.insert(0, str(ROOT_DIR))
 try:
     from diffusers import (
         StepVideoGenerationPipeline,
-        CogVideoX15Pipeline,
+        CogVideoXPipeline,
         ConsisIDPipeline,
     )
 except ImportError:
@@ -168,7 +168,7 @@ def load_video_model(args):
                 torch_dtype=torch.float16,
             ).to("cuda")
         elif args.model_type == "cogvideox":
-            model = CogVideoX15Pipeline.from_pretrained(
+            model = CogVideoXPipeline.from_pretrained(
                 args.model,
                 torch_dtype=torch.float16,
             ).to("cuda")
@@ -196,23 +196,53 @@ def load_video_model(args):
 def save_video(frames, path, fps=8):
     """保存帧序列为视频文件"""
     try:
-        if isinstance(frames, list) and isinstance(frames[0], Image.Image):
-            # 如果是PIL图像列表，转换为numpy数组
-            frames = [np.array(frame) for frame in frames]
-        
-        if isinstance(frames, np.ndarray) and frames.ndim == 4:
-            # 已经是NHWC格式的numpy数组
-            pass
-        elif isinstance(frames, torch.Tensor):
-            # 如果是torch.Tensor，转换为numpy
+        # 首先确保我们有一个有效的帧列表
+        if frames is None:
+            raise ValueError("Frames cannot be None")
+            
+        # 处理可能的帧格式
+        if hasattr(frames, "images"):
+            frames = frames.images
+        elif hasattr(frames, "frames"):
+            frames = frames.frames
+        elif hasattr(frames, "videos") and isinstance(frames.videos, list) and len(frames.videos) > 0:
+            frames = frames.videos[0]
+            
+        # 如果是PIL图像列表，转换为numpy数组并堆叠
+        if isinstance(frames, list):
+            if len(frames) == 0:
+                raise ValueError("Empty frames list")
+                
+            if isinstance(frames[0], Image.Image):
+                # 转换PIL图像列表为numpy数组
+                numpy_frames = []
+                for frame in frames:
+                    numpy_frame = np.array(frame)
+                    if numpy_frame.ndim == 2:  # 灰度图像
+                        numpy_frame = np.stack([numpy_frame] * 3, axis=-1)
+                    numpy_frames.append(numpy_frame)
+                frames = np.stack(numpy_frames)
+            elif isinstance(frames[0], np.ndarray):
+                # 已经是numpy数组列表，直接堆叠
+                frames = np.stack(frames)
+                
+        # 如果是torch.Tensor，转换为numpy
+        if isinstance(frames, torch.Tensor):
             frames = frames.cpu().numpy()
-            if frames.shape[1] == 3:  # NCHW -> NHWC
+            if frames.ndim == 4 and frames.shape[1] == 3:  # NCHW -> NHWC
                 frames = np.transpose(frames, (0, 2, 3, 1))
+                
+        # 确保frames是numpy数组且具有正确的维度
+        if not isinstance(frames, np.ndarray):
+            raise TypeError(f"Failed to convert frames to numpy array, got {type(frames)}")
         
+        if frames.ndim != 4:
+            raise ValueError(f"Expected 4D array (frames, height, width, channels), got shape {frames.shape}")
+            
         # 确保像素值在[0, 255]范围内且为uint8类型
         if frames.dtype != np.uint8:
-            if frames.max() <= 1.0:
-                frames = (frames * 255).astype(np.uint8)
+            if np.issubdtype(frames.dtype, np.floating) and frames.max() <= 1.0:
+                frames = (frames * 255).round().astype(np.uint8)
             else:
                 frames = frames.astype(np.uint8)
         
@@ -221,17 +251,44 @@ def save_video(frames, path, fps=8):
         return True
     except Exception as e:
         print(f"Error saving video: {e}")
-        # 尝试逐帧保存为图像
-        os.makedirs(path.replace('.mp4', ''), exist_ok=True)
-        for i, frame in enumerate(frames):
-            if isinstance(frame, torch.Tensor):
-                frame = frame.cpu().numpy()
-            if isinstance(frame, np.ndarray):
-                if frame.shape[0] == 3:  # CHW
-                    frame = np.transpose(frame, (1, 2, 0))
-                frame = Image.fromarray(frame.astype(np.uint8))
-            if isinstance(frame, Image.Image):
-                frame.save(f"{path.replace('.mp4', '')}/frame_{i:04d}.png")
+        # 尝试逐帧保存为图像（作为备份方法）
+        save_dir = path.replace('.mp4', '')
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # 尝试获取可以保存的帧
+        saveable_frames = frames
+        if not isinstance(saveable_frames, (list, tuple, np.ndarray)):
+            if hasattr(saveable_frames, "images"):
+                saveable_frames = saveable_frames.images
+            elif hasattr(saveable_frames, "frames"):
+                saveable_frames = saveable_frames.frames
+            else:
+                print(f"Cannot save individual frames: unknown type {type(saveable_frames)}")
+                return False
+        
+        # 逐帧保存
+        for i, frame in enumerate(saveable_frames):
+            try:
+                # 确保每一帧是PIL图像
+                if not isinstance(frame, Image.Image):
+                    if isinstance(frame, torch.Tensor):
+                        frame = frame.cpu().numpy()
+                    if isinstance(frame, np.ndarray):
+                        if frame.ndim == 3 and frame.shape[0] == 3:  # CHW
+                            frame = np.transpose(frame, (1, 2, 0))
+                        # 确保是uint8格式
+                        if frame.dtype != np.uint8:
+                            if np.issubdtype(frame.dtype, np.floating) and frame.max() <= 1.0:
+                                frame = (frame * 255).round().astype(np.uint8)
+                            else:
+                                frame = frame.astype(np.uint8)
+                        frame = Image.fromarray(frame)
+                
+                frame_path = f"{save_dir}/frame_{i:04d}.png"
+                frame.save(frame_path)
+            except Exception as frame_e:
+                print(f"Error saving frame {i}: {frame_e}")
+        
         return False
 
 def main():
