@@ -17,6 +17,20 @@ class xFuserFastCachePipelineWrapper(xFuserPipelineBaseWrapper):
     """
     
     def __init__(self, pipeline, engine_config=None):
+        # FastCache wrapper doesn't need an engine_config, we'll create a minimal one
+        if engine_config is None:
+            from xfuser.config import EngineConfig, ModelConfig, RuntimeConfig, ParallelConfig, FastAttnConfig
+            model_config = ModelConfig(model="dummy")
+            runtime_config = RuntimeConfig()
+            parallel_config = ParallelConfig()
+            fast_attn_config = FastAttnConfig()
+            engine_config = EngineConfig(
+                model_config=model_config,
+                runtime_config=runtime_config,
+                parallel_config=parallel_config,
+                fast_attn_config=fast_attn_config
+            )
+        
         super().__init__(pipeline, engine_config)
         self.fastcache_enabled = False
         self.fastcache_accelerators = {}
@@ -29,13 +43,19 @@ class xFuserFastCachePipelineWrapper(xFuserPipelineBaseWrapper):
         self.fastcache_enabled = True
         
         # Apply FastCache to transformer blocks in the model
-        # This depends on the specific model architecture, so we need to adapt
-        # based on the pipeline type
-        
-        if hasattr(self.pipeline, "unet"):
+        # Check different possible model architectures
+        if hasattr(self.module, "transformer"):
+            logger.info("Applying FastCache to Transformer model")
+            self._apply_fastcache_to_transformer(
+                self.module.transformer,
+                cache_ratio_threshold,
+                motion_threshold,
+                significance_level
+            )
+        elif hasattr(self.module, "unet"):
             logger.info("Applying FastCache to UNet model")
             self._apply_fastcache_to_unet(
-                self.pipeline.unet,
+                self.module.unet,
                 cache_ratio_threshold,
                 motion_threshold,
                 significance_level
@@ -44,6 +64,42 @@ class xFuserFastCachePipelineWrapper(xFuserPipelineBaseWrapper):
             logger.warning("Could not identify transformer blocks in the model for FastCache")
         
         return self
+    
+    def _apply_fastcache_to_transformer(self, transformer, cache_ratio_threshold, motion_threshold, significance_level):
+        """Apply FastCache to transformer blocks in DiT models"""
+        # For DiT models, we usually have transformer_blocks
+        wrapped_blocks = 0
+        
+        if hasattr(transformer, "transformer_blocks"):
+            for i, block in enumerate(transformer.transformer_blocks):
+                accelerator = FastCacheAccelerator(
+                    block,
+                    cache_ratio_threshold=cache_ratio_threshold,
+                    motion_threshold=motion_threshold,
+                    significance_level=significance_level
+                )
+                
+                self.fastcache_accelerators[f"transformer_blocks.{i}"] = accelerator
+                transformer.transformer_blocks[i] = accelerator
+                wrapped_blocks += 1
+                logger.info(f"Applied FastCache to transformer block {i}")
+        
+        # Also check for single_transformer_blocks (like in Flux)
+        if hasattr(transformer, "single_transformer_blocks"):
+            for i, block in enumerate(transformer.single_transformer_blocks):
+                accelerator = FastCacheAccelerator(
+                    block,
+                    cache_ratio_threshold=cache_ratio_threshold,
+                    motion_threshold=motion_threshold,
+                    significance_level=significance_level
+                )
+                
+                self.fastcache_accelerators[f"single_transformer_blocks.{i}"] = accelerator
+                transformer.single_transformer_blocks[i] = accelerator
+                wrapped_blocks += 1
+                logger.info(f"Applied FastCache to single transformer block {i}")
+        
+        logger.info(f"Applied FastCache to {wrapped_blocks} transformer blocks in the model")
     
     def _apply_fastcache_to_unet(self, unet, cache_ratio_threshold, motion_threshold, significance_level):
         """Apply FastCache to transformer blocks in UNet models"""
@@ -94,7 +150,8 @@ class xFuserFastCachePipelineWrapper(xFuserPipelineBaseWrapper):
     
     def prepare_run(self, input_config):
         """Prepare the pipeline for running"""
-        super().prepare_run(input_config)
+        # FastCache doesn't need special preparation
+        pass
     
     def get_cache_statistics(self):
         """Get cache hit statistics for all accelerators"""
@@ -111,15 +168,15 @@ class xFuserFastCachePipelineWrapper(xFuserPipelineBaseWrapper):
         for accelerator in self.fastcache_accelerators.values():
             accelerator.reset_stats()
     
-    def forward(self, *args, **kwargs):
-        """Forward pass for the pipeline, with FastCache if enabled"""
+    def __call__(self, *args, **kwargs):
+        """Main call method required by the abstract base class"""
         
         # If FastCache is not enabled, fall back to the original pipeline
         if not self.fastcache_enabled or not self.fastcache_accelerators:
-            return self.pipeline(*args, **kwargs)
+            return self.module(*args, **kwargs)
         
         # Process with FastCache-wrapped pipeline
-        result = self.pipeline(*args, **kwargs)
+        result = self.module(*args, **kwargs)
         
         # Log cache statistics
         total_hits = 0
@@ -135,4 +192,8 @@ class xFuserFastCachePipelineWrapper(xFuserPipelineBaseWrapper):
         if total_steps > 0:
             logger.info(f"FastCache overall: {total_hits}/{total_steps} hits ({total_hits/total_steps:.2%})")
         
-        return result 
+        return result
+    
+    def forward(self, *args, **kwargs):
+        """Forward pass for the pipeline, with FastCache if enabled"""
+        return self.__call__(*args, **kwargs) 
