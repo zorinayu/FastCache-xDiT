@@ -211,6 +211,10 @@ python benchmark/cache_execute.py \
   --output_dir cache_results
 ```
 
+```bash
+python benchmark/cache_execution_xfuser.py --model_type pixart --cache_methods Fast --num_inference_steps 5 --height 256 --width 256 --output_dir test_results
+```
+
 
 #### Command Line Arguments
 
