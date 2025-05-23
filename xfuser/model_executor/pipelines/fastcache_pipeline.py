@@ -19,11 +19,34 @@ class xFuserFastCachePipelineWrapper(xFuserPipelineBaseWrapper):
     def __init__(self, pipeline, engine_config=None):
         # FastCache wrapper doesn't need an engine_config, we'll create a minimal one
         if engine_config is None:
-            from xfuser.config import EngineConfig, ModelConfig, RuntimeConfig, ParallelConfig, FastAttnConfig
+            from xfuser.config import (
+                EngineConfig, ModelConfig, RuntimeConfig, ParallelConfig,
+                DataParallelConfig, SequenceParallelConfig, TensorParallelConfig, PipeFusionParallelConfig
+            )
+            from xfuser.config.config import FastAttnConfig
+            
+            # Create minimal configs with required parameters
             model_config = ModelConfig(model="dummy")
             runtime_config = RuntimeConfig()
-            parallel_config = ParallelConfig()
+            
+            # Create parallel config with all required sub-configs
+            dp_config = DataParallelConfig(dit_parallel_size=1)
+            sp_config = SequenceParallelConfig(dit_parallel_size=1)
+            tp_config = TensorParallelConfig(dit_parallel_size=1)
+            pp_config = PipeFusionParallelConfig(dit_parallel_size=1)
+            
+            parallel_config = ParallelConfig(
+                dp_config=dp_config,
+                sp_config=sp_config,
+                tp_config=tp_config,
+                pp_config=pp_config,
+                world_size=1,
+                dit_parallel_size=1,
+                vae_parallel_size=0
+            )
+            
             fast_attn_config = FastAttnConfig()
+            
             engine_config = EngineConfig(
                 model_config=model_config,
                 runtime_config=runtime_config,
