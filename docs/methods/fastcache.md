@@ -107,7 +107,6 @@ Output:
        If δ_{t,l}² ≤ χ²_{ND,1-α}/ND:
            # Only static tokens take linear approximation through this block
            H_static_l = W_block_l × H_static + b_block_l
-           # Motion tokens remain unchanged (no block execution)
        Else:
            # Motion tokens enter full transformer block
            H_motion = TransformerBlock_l(H_motion)
