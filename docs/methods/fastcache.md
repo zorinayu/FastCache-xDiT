@@ -13,15 +13,15 @@ FastCache operates through two complementary linear approximation modules:
 
 
 <picture>
-  <img alt="FastCache Architecture" src="assets/architecture.png" width="80%">
+  <img alt="FastCache Architecture" src="../../assets/architecture.png" width="80%">
 </picture>
 
 <picture>
-  <img alt="FastCache Interpretability" src="assets/overview.png" width="80%">
+  <img alt="FastCache Interpretability" src="../../assets/overview.png" width="80%">
 </picture>
 
 <picture>
-  <img alt="FastCache Model Design" src="assets/DiTLevelCache-interp.png" width="80%">
+  <img alt="FastCache Model Design" src="../../assets/DiTLevelCache-interp.png" width="80%">
 </picture>
 
 ## Technical Framework: Dual-Level Linear Approximation
@@ -30,14 +30,14 @@ FastCache operates through two complementary linear approximation modules:
 
 FastCache first identifies which input tokens are likely to produce significant activation changes and which are static. This decision is made before any transformer block computation.
 
-Let $X_t \in \mathbb{R}^{N \times D}$ be the input tokens at timestep $t$, and $X_{t-1}$ be those from the previous timestep. We compute a motion-based saliency score for each token:
+Let $X_t \in R^{N \times D}$ be the input tokens at timestep $t$, and $X_{t-1}$ be those from the previous timestep. We compute a motion-based saliency score for each token:
 
-$$S^{(i)}_t = \| X^{(i)}_t - X^{(i)}_{t-1} \|_2^2$$
+$S_t^{(i)} = \| X_t^{(i)} - X_{t-1}^{(i)} \|_2^2$
 
 Tokens are partitioned as:
 
-- **Dynamic Tokens** $\mathcal{M}_t$: High motion saliency → pass through full transformer stack
-- **Static Tokens** $\mathcal{S}_t$: Low motion saliency → replaced with linear approximations
+- **Dynamic Tokens** $M_t$: High motion saliency → pass through full transformer stack
+- **Static Tokens** $S_t$: Low motion saliency → replaced with linear approximations
 
 
 ### 2. Transformer Block Linear Approximation
