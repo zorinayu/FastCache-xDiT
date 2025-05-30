@@ -42,7 +42,15 @@ FastCache introduces a hidden-state-level caching and compression framework with
 2. **Transformer-Level Caching Module** - Uses statistical tests to determine when entire transformer blocks can be skipped
 
 <picture>
-  <img alt="FastCache Design" src="assets/FastCache-Video.png" width="80%">
+  <img alt="FastCache Architecture" src="assets/architecture.png" width="80%">
+</picture>
+
+<picture>
+  <img alt="FastCache Interpretability" src="assets/overview.png" width="80%">
+</picture>
+
+<picture>
+  <img alt="FastCache Model Design" src="assets/DiTLevelCache-interp.png" width="80%">
 </picture>
 
 <h2 id="performance-comparison">📊 Performance Comparison</h2>

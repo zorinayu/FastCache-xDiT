@@ -11,8 +11,18 @@ FastCache operates through two complementary linear approximation modules:
 1. **Spatial Linear Approximation** - Replaces transformer processing of static tokens with learnable linear projections
 2. **Temporal Linear Approximation** - Substitutes entire transformer blocks with block-specific linear transformations when hidden states show minimal change
 
-![FastCache Model Overview](https://raw.githubusercontent.com/xdit-project/xdit_assets/main/methods/fastcache_overview.png)
 
+<picture>
+  <img alt="FastCache Architecture" src="assets/architecture.png" width="80%">
+</picture>
+
+<picture>
+  <img alt="FastCache Interpretability" src="assets/overview.png" width="80%">
+</picture>
+
+<picture>
+  <img alt="FastCache Model Design" src="assets/DiTLevelCache-interp.png" width="80%">
+</picture>
 
 ## Technical Framework: Dual-Level Linear Approximation
 
@@ -20,16 +30,14 @@ FastCache operates through two complementary linear approximation modules:
 
 FastCache first identifies which input tokens are likely to produce significant activation changes and which are static. This decision is made before any transformer block computation.
 
-Let \( X_t \in \mathbb{R}^{N \times D} \) be the input tokens at timestep \( t \), and \( X_{t-1} \) be those from the previous timestep. We compute a motion-based saliency score for each token:
+Let $X_t \in \mathbb{R}^{N \times D}$ be the input tokens at timestep $t$, and $X_{t-1}$ be those from the previous timestep. We compute a motion-based saliency score for each token:
 
-\[
-S^{(i)}_t = \| X^{(i)}_t - X^{(i)}_{t-1} \|_2^2
-\]
+$$S^{(i)}_t = \| X^{(i)}_t - X^{(i)}_{t-1} \|_2^2$$
 
 Tokens are partitioned as:
 
-- **Dynamic Tokens** \( \mathcal{M}_t \): High motion saliency → pass through full transformer stack
-- **Static Tokens** \( \mathcal{S}_t \): Low motion saliency → replaced with linear approximations
+- **Dynamic Tokens** $\mathcal{M}_t$: High motion saliency → pass through full transformer stack
+- **Static Tokens** $\mathcal{S}_t$: Low motion saliency → replaced with linear approximations
 
 
 ### 2. Transformer Block Linear Approximation
@@ -246,6 +254,12 @@ result = paralleler(...)  # Benefits from both linear approximation and parallel
 If you use FastCache's linear approximation framework in your research, please cite:
 
 ```bibtex
+@article{liu2025fastcache,
+  title={FastCache: Fast Caching for Diffusion Transformer Through Learnable Linear Approximation},
+  author={Liu, Dong and Zhang, Jiayi and Li, Yifan and Yu, Yanxuan and Lengerich, Ben and Wu, Ying Nian},
+  journal={arXiv preprint arXiv:2505.20353},
+  year={2025}
+}
 @inproceedings{liu2025fastcache,
   title={FastCache: Cache What Matters, Skip What Doesn't.},
   author={Liu, Dong and Zhang, Jiayi and Li, Yifan and Yu, Yanxuan and Lengerich, Ben and Wu, Ying Nian},
