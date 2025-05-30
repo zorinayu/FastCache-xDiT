@@ -254,16 +254,16 @@ result = paralleler(...)  # Benefits from both linear approximation and parallel
 If you use FastCache's linear approximation framework in your research, please cite:
 
 ```bibtex
-@article{liu2025fastcache,
-  title={FastCache: Fast Caching for Diffusion Transformer Through Learnable Linear Approximation},
-  author={Liu, Dong and Zhang, Jiayi and Li, Yifan and Yu, Yanxuan and Lengerich, Ben and Wu, Ying Nian},
-  journal={arXiv preprint arXiv:2505.20353},
-  year={2025}
-}
 @inproceedings{liu2025fastcache,
   title={FastCache: Cache What Matters, Skip What Doesn't.},
   author={Liu, Dong and Zhang, Jiayi and Li, Yifan and Yu, Yanxuan and Lengerich, Ben and Wu, Ying Nian},
   booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) Workshops},
+  year={2025}
+}
+@article{liu2025fastcache,
+  title={FastCache: Fast Caching for Diffusion Transformer Through Learnable Linear Approximation},
+  author={Liu, Dong and Zhang, Jiayi and Li, Yifan and Yu, Yanxuan and Lengerich, Ben and Wu, Ying Nian},
+  journal={arXiv preprint arXiv:2505.20353},
   year={2025}
 }
 ```

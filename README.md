@@ -361,6 +361,12 @@ If you use FastCache-xDiT in your research or applications, please cite:
   booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) Workshops},
   year={2025}
 }
+@article{liu2025fastcache,
+  title={FastCache: Fast Caching for Diffusion Transformer Through Learnable Linear Approximation},
+  author={Liu, Dong and Zhang, Jiayi and Li, Yifan and Yu, Yanxuan and Lengerich, Ben and Wu, Ying Nian},
+  journal={arXiv preprint arXiv:2505.20353},
+  year={2025}
+}
 ```
 
 ## Contact
