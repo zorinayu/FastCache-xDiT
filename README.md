@@ -171,6 +171,32 @@ stats = fastcache_wrapper.get_cache_statistics()
 print(stats)
 ```
 
+#### Enhanced Linear Approximation Algorithm
+
+FastCache also supports an enhanced Linear Approximation Algorithm that combines both block-level and token-level optimizations:
+
+```python
+# Enable enhanced linear approximation
+fastcache_wrapper.enable_fastcache(
+    cache_ratio_threshold=0.05,
+    motion_threshold=0.1,
+    enable_enhanced_linear_approx=True,  # Enable enhanced algorithm
+    significance_level=0.05,             # Statistical significance level
+)
+```
+
+The enhanced algorithm implements:
+
+**Block-Level Linear Approximation:**
+- Statistical change detection with chi-square test
+- Per-block learnable linear projections
+- Adaptive thresholding based on timestep and variance
+
+**Token-Level Linear Approximation:**
+- Motion-aware token masking
+- Static token processing with learnable linear projections
+- Dynamic token processing through full transformer stack
+
 #### Command Line Usage
 
 Run FastCache with PixArt Sigma:
@@ -207,6 +233,32 @@ python examples/run_fastcache_test.py \
 ./examples/run_fastcache_benchmark.sh flux
 ```
 
+#### Enhanced Linear Approximation Algorithm
+
+Test the enhanced Linear Approximation Algorithm:
+
+```bash
+# Test enhanced FastCache with Flux model
+python examples/test_enhanced_linear_approx.py \
+    --model_type flux \
+    --model "black-forest-labs/FLUX.1-schnell" \
+    --prompt "a serene landscape with mountains and a lake" \
+    --num_inference_steps 30 \
+    --enable_enhanced \
+    --significance_level 0.05 \
+    --cache_ratio_threshold 0.05 \
+    --motion_threshold 0.1
+
+# Test enhanced FastCache with PixArt model
+python examples/test_enhanced_linear_approx.py \
+    --model_type pixart \
+    --model "PixArt-alpha/PixArt-Sigma-XL-2-1024-MS" \
+    --prompt "a photo of an astronaut riding a horse on the moon" \
+    --num_inference_steps 30 \
+    --enable_enhanced \
+    --significance_level 0.05
+```
+
 ### 2. Using FastCache Acceleration Benchmark compared to other Acceleration Methods
 
 ```bash
@@ -238,6 +290,8 @@ python benchmark/cache_execution_xfuser.py --model_type pixart --cache_methods F
 | `--width` | Image width | `768` |
 | `--cache_ratio_threshold` | Cache ratio threshold | `0.05` |
 | `--motion_threshold` | FastCache motion threshold | `0.1` |
+| `--enable_enhanced` | Enable enhanced linear approximation | `False` |
+| `--significance_level` | Statistical significance level | `0.05` |
 | `--output_dir` | Output directory for results | `fastcache_test_results` |
 
 ### 3. Benchmark FastCache

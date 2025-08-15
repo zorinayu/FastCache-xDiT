@@ -267,6 +267,8 @@ class FastCachedTransformerBlocks(CachedTransformerBlocks):
         num_steps=-1,
         name="default",
         callbacks: Optional[List[CacheCallback]] = None,
+        enable_enhanced_linear_approx=False,  # 新增：是否启用增强的线性近似算法
+        significance_level=0.05,  # 新增：统计显著性水平
     ):
         super().__init__(transformer_blocks,
                        single_transformer_blocks=single_transformer_blocks,
@@ -313,6 +315,180 @@ class FastCachedTransformerBlocks(CachedTransformerBlocks):
         
         # 创建空间token减少模块的线性投影
         self.spatial_projection = torch.nn.Linear(hidden_size, hidden_size).cuda()
+        
+        # 新增：增强线性近似算法的参数
+        self.enable_enhanced_linear_approx = enable_enhanced_linear_approx
+        self.significance_level = significance_level
+        
+        if self.enable_enhanced_linear_approx:
+            # 为增强算法创建额外的线性投影层
+            self.enhanced_block_projections = torch.nn.ModuleList([
+                torch.nn.Linear(hidden_size, hidden_size).cuda() 
+                for _ in range(self.num_layers)
+            ])
+            
+            # 静态token的专用线性投影
+            self.static_token_projection = torch.nn.Linear(hidden_size, hidden_size).cuda()
+            
+            # 统计阈值计算参数
+            self.chi2_thresholds = {}  # 缓存卡方分布阈值
+            
+            print(f"Enhanced Linear Approximation Algorithm enabled with significance_level={significance_level}")
+
+    def get_chi2_threshold(self, n, d, alpha):
+        """计算卡方分布阈值 χ²_{ND, 1-α}"""
+        dof = n * d  # degrees of freedom
+        key = (n, d, alpha)
+        
+        if key not in self.chi2_thresholds:
+            # 对于大自由度，使用正态分布近似卡方分布
+            # χ²_{ND, 1-α} ≈ ND + z_{1-α} * sqrt(2*ND)
+            z_alpha = torch.erfinv(2 * (1 - alpha) - 1) * math.sqrt(2)
+            chi2_threshold = dof + z_alpha * math.sqrt(2 * dof)
+            self.chi2_thresholds[key] = chi2_threshold
+        
+        return self.chi2_thresholds[key]
+
+    def enhanced_block_level_linear_approximation(self, hidden_states, prev_hidden_states, layer_idx):
+        """
+        增强的块级线性近似算法
+        
+        Algorithm: FastCache Linear Approximation Framework
+        Input: Hidden state H_t, previous H_{t-1}, learnable parameters {W, b}
+        Output: Approximated hidden state H_t^L
+        """
+        if prev_hidden_states is None:
+            return hidden_states, False
+        
+        # 计算相对变化 δ_{t,l} = ||H_{t,l-1} - H_{t-1,l-1}||_F / ||H_{t-1,l-1}||_F
+        diff_norm = torch.norm(hidden_states - prev_hidden_states, p='fro')
+        prev_norm = torch.norm(prev_hidden_states, p='fro')
+        
+        if prev_norm == 0:
+            return hidden_states, False
+        
+        delta = diff_norm / prev_norm
+        
+        # 计算统计阈值
+        n, d = hidden_states.shape[0], hidden_states.shape[1]
+        chi2_threshold = self.get_chi2_threshold(n, d, self.significance_level)
+        statistical_threshold = math.sqrt(chi2_threshold / (n * d))
+        
+        # 判断是否使用线性近似：δ_{t,l}² ≤ χ²_{ND,1-α}/ND
+        use_linear_approx = (delta ** 2) <= (chi2_threshold / (n * d))
+        
+        if use_linear_approx:
+            # 应用线性近似：H_{t,l} = W_block_l × H_{t,l-1} + b_block_l
+            approximated_hidden = self.enhanced_block_projections[layer_idx](hidden_states)
+            return approximated_hidden, True
+        else:
+            # 完整transformer计算
+            return hidden_states, False
+
+    def enhanced_token_level_linear_approximation(self, hidden_states, prev_hidden_states, encoder_hidden_states=None):
+        """
+        增强的token级线性近似算法
+        
+        Algorithm: FastCache Linear Approximation with Masking
+        Input: Token embedding X_t, previous X_{t-1}, Previous hidden states {H_{t-1,l}}
+        Output: Final hidden state H_{t,L}
+        """
+        if prev_hidden_states is None:
+            return hidden_states, encoder_hidden_states, None, None, None, None
+        
+        batch_size, seq_len, hidden_dim = hidden_states.shape
+        
+        # === Token-Level Saliency Mask ===
+        # 计算显著性：S_t = ||X_t - X_{t-1}||²
+        token_diffs = (hidden_states - prev_hidden_states) ** 2
+        saliency = token_diffs.sum(dim=-1)  # [batch_size, seq_len]
+        
+        # Token mask: M_token = {i | S_t[i] > τ_motion}, S_token = {i | S_t[i] ≤ τ_motion}
+        motion_mask = saliency > self.motion_threshold  # [batch_size, seq_len]
+        static_mask = ~motion_mask
+        
+        # 如果没有静态token，直接返回
+        if not static_mask.any():
+            return hidden_states, encoder_hidden_states, None, None, motion_mask, static_mask
+        
+        # 预计算静态token的输出：H_static = W_static × X_t[S_token] + b_static
+        static_hidden = hidden_states.clone()
+        static_hidden[static_mask] = self.static_token_projection(hidden_states[static_mask])
+        
+        # 运动token通过完整transformer处理
+        motion_hidden = hidden_states.clone()
+        
+        # 处理encoder_hidden_states（如果存在）
+        if encoder_hidden_states is not None:
+            static_encoder = encoder_hidden_states.clone()
+            static_encoder[static_mask] = self.static_token_projection(encoder_hidden_states[static_mask])
+            motion_encoder = encoder_hidden_states.clone()
+        else:
+            static_encoder = None
+            motion_encoder = None
+        
+        return motion_hidden, motion_encoder, static_hidden, static_encoder, motion_mask, static_mask
+
+    def enhanced_process_blocks(self, start_idx: int, hidden: torch.Tensor, encoder: torch.Tensor, *args, **kwargs):
+        """
+        增强的块处理算法，结合块级和token级线性近似
+        """
+        if not self.enable_enhanced_linear_approx:
+            return self.process_blocks(start_idx, hidden, encoder, *args, **kwargs)
+        
+        # 获取previous hidden states
+        prev_hidden_states = self.cache_context.prev_hidden_states
+        
+        # 第一步：token级线性近似
+        result = self.enhanced_token_level_linear_approximation(hidden, prev_hidden_states, encoder)
+        motion_hidden, motion_encoder, static_hidden, static_encoder, motion_mask, static_mask = result
+        
+        # 如果没有有效的mask，使用原始处理方式
+        if motion_mask is None or static_mask is None:
+            return self.process_blocks(start_idx, hidden, encoder, *args, **kwargs)
+        
+        # 第二步：对运动token应用块级线性近似
+        current_hidden = motion_hidden
+        current_encoder = motion_encoder
+        
+        for i, block in enumerate(self.transformer_blocks[start_idx:], start=start_idx):
+            # 计算相对变化并决定是否使用块级线性近似
+            if prev_hidden_states is not None:
+                approximated_hidden, used_approx = self.enhanced_block_level_linear_approximation(
+                    current_hidden, prev_hidden_states, i
+                )
+                
+                if used_approx:
+                    # 使用线性近似
+                    current_hidden = approximated_hidden
+                    self.cache_hits += 1
+                    continue
+            
+            # 完整执行transformer块
+            current_hidden, current_encoder = block(current_hidden, current_encoder, *args, **kwargs)
+            current_hidden, current_encoder = (current_hidden, current_encoder) if self.return_hidden_states_first else (current_encoder, current_hidden)
+        
+        # 处理single_transformer_blocks（如果存在）
+        if self.single_transformer_blocks and current_encoder is not None:
+            current_hidden = torch.cat([current_encoder, current_hidden], dim=1)
+            for block in self.single_transformer_blocks:
+                current_hidden = block(current_hidden, *args, **kwargs)
+            current_encoder, current_hidden = current_hidden.split([current_encoder.shape[1], current_hidden.shape[1] - current_encoder.shape[1]], dim=1)
+        
+        # 第三步：最终组合
+        # 将处理后的运动token和静态token组合
+        final_hidden = hidden.clone()
+        final_hidden[motion_mask] = current_hidden[motion_mask]
+        if static_hidden is not None:
+            final_hidden[static_mask] = static_hidden[static_mask]
+        
+        final_encoder = encoder.clone() if encoder is not None else None
+        if final_encoder is not None and current_encoder is not None:
+            final_encoder[motion_mask] = current_encoder[motion_mask]
+            if static_encoder is not None:
+                final_encoder[static_mask] = static_encoder[static_mask]
+        
+        return final_hidden, final_encoder
 
     def get_start_idx(self) -> int:
         return 0  # Process all blocks when not caching
@@ -415,6 +591,10 @@ class FastCachedTransformerBlocks(CachedTransformerBlocks):
     
     def process_blocks(self, start_idx: int, hidden: torch.Tensor, encoder: torch.Tensor, *args, **kwargs):
         """Override to implement space-time FastCache"""
+        # 如果启用了增强线性近似算法，使用增强版本
+        if self.enable_enhanced_linear_approx:
+            return self.enhanced_process_blocks(start_idx, hidden, encoder, *args, **kwargs)
+        
         # 如果使用transformer级缓存，直接使用线性投影
         if self.use_cache:
             # H_{t,l} = W_l H_{t,l-1} + b_l (线性近似)
